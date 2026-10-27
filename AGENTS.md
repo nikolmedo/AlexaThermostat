@@ -146,6 +146,9 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
   becomes the login and API host.
 - **Humidity** is a generic `range` feature found by a localized friendly name; the parser matches
   keywords (`HUMIDITY_KEYWORDS`). Add a keyword when a region's name is missed.
+- **hassfest rules that bit us:** entries under `exceptions` in `translations/en.json` must be
+  objects (`{"message": "..."}`), not strings. Do not add `categories` to `manifest.json`: the
+  hassfest action rejects it as an unknown key (HACS only warns when it is missing).
 - **Config flow sessions** are closed on failed logins, on discovery failure (abort) and in
   `async_remove` when the user abandons the dialog.
 
@@ -207,7 +210,7 @@ Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`
 ## Getting into the default HACS catalog
 
 Requirements already met by the repository: public, `hacs.json`, `manifest.json` with `domain`,
-`documentation`, `issue_tracker`, `codeowners`, `name`, `version`, `categories`; brand icon;
+`documentation`, `issue_tracker`, `codeowners`, `name`, `version`; brand icon;
 MIT license; HACS action and hassfest workflows. Still needed: repository description and topics
 on GitHub, issues enabled, both workflows green, and at least one full GitHub release. Then open a
 pull request to `hacs/default` adding `nikolmedo/HACS-AlexaThermostat` to the `integration` file.
