@@ -154,6 +154,8 @@ async def test_resume_requires_successful_refresh(alexa_login: MagicMock) -> Non
         ("ABCD\u00a0EFGH\u00a0IJKL", "ABCDEFGHIJKL"),
         (" ABCD\u200bEFGH\nIJKL\t", "ABCDEFGHIJKL"),
         ("abcd-efgh-ijkl", "ABCDEFGHIJKL"),
+        # Unexpected characters are kept so validation can reject the key.
+        ("abcdéfgh", "ABCDÉFGH"),
         ("", ""),
     ],
 )
@@ -179,3 +181,14 @@ async def test_login_forwards_security_code(alexa_login: MagicMock) -> None:
     alexa_login.return_value.login.assert_awaited_once_with(
         data={"password": "pw", "securitycode": "123456"}
     )
+
+
+def test_key_with_unexpected_characters_is_rejected() -> None:
+    """A look-alike character reaches pyotp and fails instead of being dropped."""
+    with pytest.raises(AlexaInvalidOtpSecret):
+        AlexaAuth(
+            "amazon.com",
+            "user@example.com",
+            lambda path: path,
+            otp_secret=normalize_otp_input("ABCD EFGH ÉJKL MNOP"),
+        )

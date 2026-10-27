@@ -239,6 +239,31 @@ async def test_reauth_keeps_device_uuid(
     assert mock_config_entry.data[CONF_TOKENS] == new_tokens
 
 
+async def test_reauth_with_one_time_code(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    flow_auth: MagicMock,
+    flow_client: MagicMock,
+    no_setup: None,
+) -> None:
+    """A 6-digit code during reauth is used once and never stored in the entry."""
+    mock_config_entry.add_to_hass(hass)
+    stored_before = dict(mock_config_entry.data)
+
+    result = await mock_config_entry.start_reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PASSWORD: "new-secret", CONF_OTP_SECRET: "246802"}
+    )
+
+    assert result["reason"] == "reauth_successful"
+    assert flow_auth.call_args.kwargs["otp_secret"] == ""
+    flow_auth.return_value.async_login.assert_awaited_once_with(
+        {CONF_PASSWORD: "new-secret", "securitycode": "246802"}
+    )
+    assert set(mock_config_entry.data) == set(stored_before)
+    assert "246802" not in str(mock_config_entry.data)
+
+
 async def test_options_flow(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, no_setup: None
 ) -> None:
