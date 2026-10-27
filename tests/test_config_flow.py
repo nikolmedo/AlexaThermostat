@@ -126,9 +126,15 @@ async def test_user_flow_errors_then_recovers(
 ) -> None:
     """Login errors are shown on the form and the user can retry."""
     flow_auth.return_value.async_login.side_effect = [error, None]
-    result = await _start(hass)
+    result = await _start(hass, {**USER_INPUT, CONF_OTP_SECRET: "ABCD"})
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": expected}
+    suggested = {
+        str(key): key.description["suggested_value"]
+        for key in result["data_schema"].schema
+        if key.description and "suggested_value" in key.description
+    }
+    assert suggested == {CONF_EMAIL: EMAIL, CONF_AMAZON_DOMAIN: "amazon.com"}
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
     assert result["type"] is FlowResultType.CREATE_ENTRY

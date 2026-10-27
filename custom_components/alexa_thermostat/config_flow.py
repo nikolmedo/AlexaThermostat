@@ -117,7 +117,14 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
+            data_schema=self.add_suggested_values_to_schema(
+                USER_SCHEMA,
+                {
+                    key: value
+                    for key, value in (user_input or {}).items()
+                    if key not in (CONF_PASSWORD, CONF_OTP_SECRET)
+                },
+            ),
             errors=errors,
         )
 
