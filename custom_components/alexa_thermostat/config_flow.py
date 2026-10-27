@@ -139,15 +139,16 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
             for session in find_alexa_media_sessions(self.hass)
             if self.source != SOURCE_REAUTH or self._matches_reauth_account(session)
         }
-        if not sessions:
-            return self.async_abort(reason="alexa_media_not_found")
-        if len(sessions) == 1:
-            return await self._async_use_alexa_media(next(iter(sessions.values())))
         if user_input is not None:
+            # Honor the submitted choice first: never import a different account.
             if (chosen := sessions.get(user_input[CONF_ACCOUNT])) is None:
                 # The account was removed or signed out while the form was open.
                 return self.async_abort(reason="alexa_media_not_found")
             return await self._async_use_alexa_media(chosen)
+        if not sessions:
+            return self.async_abort(reason="alexa_media_not_found")
+        if len(sessions) == 1:
+            return await self._async_use_alexa_media(next(iter(sessions.values())))
 
         options = [
             SelectOptionDict(value=entry_id, label=f"{session.email} ({session.amazon_domain})")

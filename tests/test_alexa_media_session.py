@@ -372,6 +372,27 @@ async def test_chosen_account_removed_before_submit(
     flow_auth.assert_not_called()
 
 
+async def test_chosen_account_gone_never_imports_another(
+    hass: HomeAssistant, flow_auth: MagicMock, flow_client: MagicMock
+) -> None:
+    """With one other account left, the submitted choice still wins: abort, not import."""
+    other = _amp_entry("other@example.com")
+    other.add_to_hass(hass)
+    mine = _amp_entry()
+    mine.add_to_hass(hass)
+    result = await _choose_alexa_media(hass)
+    assert result["step_id"] == "alexa_media"
+
+    hass.config_entries.async_update_entry(mine, data={**mine.data, "oauth": {}})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"account": mine.entry_id}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "alexa_media_not_found"
+    flow_auth.assert_not_called()
+
+
 async def test_reauth_falls_back_to_password_form(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
