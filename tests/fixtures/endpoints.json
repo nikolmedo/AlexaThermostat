@@ -1,0 +1,55 @@
+{
+  "data": {
+    "endpoints": {
+      "items": [
+        {
+          "id": "amzn1.alexa.endpoint.thermostat-1",
+          "friendlyName": "Living Room Thermostat",
+          "enablement": "ENABLED",
+          "displayCategories": {"primary": {"value": "THERMOSTAT"}},
+          "serialNumber": {"value": {"text": "G0123456789"}},
+          "model": {"value": {"text": "Amazon Smart Thermostat"}},
+          "manufacturer": {"value": {"text": "Amazon"}},
+          "features": [
+            {"name": "temperatureSensor", "instance": null, "operations": null},
+            {
+              "name": "thermostat",
+              "instance": null,
+              "operations": [
+                {"name": "setTargetSetpoint"},
+                {"name": "adjustTargetSetpoint"},
+                {"name": "setThermostatMode"}
+              ]
+            },
+            {"name": "power", "instance": null, "operations": [{"name": "turnOn"}, {"name": "turnOff"}]},
+            {"name": "range", "instance": "4", "operations": null}
+          ]
+        },
+        {
+          "id": "amzn1.alexa.endpoint.light-1",
+          "friendlyName": "Kitchen Light",
+          "enablement": "ENABLED",
+          "displayCategories": {"primary": {"value": "LIGHT"}},
+          "serialNumber": null,
+          "model": null,
+          "manufacturer": null,
+          "features": [{"name": "power", "instance": null, "operations": [{"name": "turnOn"}, {"name": "turnOff"}]}]
+        },
+        {
+          "id": "amzn1.alexa.endpoint.thermostat-disabled",
+          "friendlyName": "Old Thermostat",
+          "enablement": "DISABLED",
+          "displayCategories": {"primary": {"value": "THERMOSTAT"}},
+          "features": [{"name": "thermostat", "instance": null, "operations": [{"name": "setTargetSetpoint"}]}]
+        },
+        {
+          "id": "amzn1.alexa.endpoint.sensor-only",
+          "friendlyName": "Temperature Sensor",
+          "enablement": "ENABLED",
+          "displayCategories": {"primary": {"value": "THERMOSTAT"}},
+          "features": [{"name": "temperatureSensor", "instance": null, "operations": null}]
+        }
+      ]
+    }
+  }
+}

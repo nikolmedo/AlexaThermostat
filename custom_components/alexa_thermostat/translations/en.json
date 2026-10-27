@@ -1,0 +1,73 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to Amazon",
+        "description": "Use the Amazon account your thermostat is linked to in the Alexa app. Your password is only used to sign in and is never stored.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "amazon_domain": "Amazon region",
+          "otp_secret": "2FA app key (optional)"
+        },
+        "data_description": {
+          "amazon_domain": "The Amazon site you use for Alexa, for example amazon.com or amazon.co.uk.",
+          "otp_secret": "Recommended. In Amazon's Two-Step Verification settings add a new authenticator app, choose \"Can't scan the barcode?\" and paste the key shown. Home Assistant will then generate the codes for you."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in again",
+        "description": "Amazon ended the session for {email}. Enter your password to sign in again.",
+        "data": {
+          "password": "Password",
+          "otp_secret": "2FA app key (optional)"
+        }
+      },
+      "security_code": {
+        "title": "Verification code",
+        "description": "Amazon sent you a one-time code (authenticator app, SMS or email). Enter it to continue.",
+        "data": {
+          "security_code": "Code"
+        }
+      },
+      "captcha": {
+        "title": "Captcha",
+        "description": "Amazon wants to make sure you are not a robot. Type the characters you see.\n\n![captcha]({captcha_url})",
+        "data": {
+          "captcha": "Characters"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Amazon rejected the email or password.",
+      "invalid_otp_secret": "The 2FA app key is not valid. Copy it again from Amazon without spaces.",
+      "cannot_connect": "Could not reach Amazon. Check your connection and try again.",
+      "unsupported_challenge": "Amazon asked for a verification step this integration cannot show yet (for example approving the sign-in in the Amazon app). Approve it if asked, or add a 2FA app key, then try again.",
+      "unknown": "Unexpected error. Check the logs for details."
+    },
+    "abort": {
+      "already_configured": "This Amazon account is already configured.",
+      "reauth_successful": "Signed in again successfully.",
+      "no_thermostats": "No thermostat was found on this Amazon account. Make sure it shows up in the Alexa app."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Alexa Thermostat options",
+        "data": {
+          "scan_interval": "Update interval"
+        },
+        "data_description": {
+          "scan_interval": "How often to read the thermostat from Alexa, in seconds. Lower values react faster but make more requests to Amazon."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "single_setpoint_in_auto": "The thermostat is in heat/cool mode. Set the low and high temperatures instead of a single target.",
+    "command_rejected": "Alexa rejected the command ({codes}).",
+    "auth_failed": "The Amazon session expired. Sign in again from the integration page.",
+    "cannot_connect": "Could not reach Alexa: {error}"
+  }
+}

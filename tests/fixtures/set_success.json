@@ -1,0 +1,10 @@
+{
+  "data": {
+    "setEndpointFeatures": {
+      "featureControlResponses": [
+        {"endpointId": "amzn1.alexa.endpoint.thermostat-1", "featureOperationName": "setTargetSetpoint"}
+      ],
+      "errors": []
+    }
+  }
+}

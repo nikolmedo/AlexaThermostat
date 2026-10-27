@@ -1,0 +1,24 @@
+{
+  "data": {
+    "endpoint": {
+      "features": [
+        {
+          "name": "temperatureSensor",
+          "instance": null,
+          "properties": [{"name": "temperature", "value": {"value": 21.3, "scale": "CELSIUS"}}],
+          "configuration": null
+        },
+        {
+          "name": "thermostat",
+          "instance": null,
+          "properties": [
+            {"name": "thermostatMode", "thermostatModeValue": "AUTO"},
+            {"name": "lowerSetpoint", "value": {"value": 20, "scale": "CELSIUS"}},
+            {"name": "upperSetpoint", "value": {"value": 24.5, "scale": "CELSIUS"}}
+          ],
+          "configuration": null
+        }
+      ]
+    }
+  }
+}
