@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 from unittest.mock import MagicMock
 
@@ -19,6 +20,7 @@ from homeassistant.components.climate import (
     SERVICE_SET_PRESET_MODE,
     SERVICE_SET_TEMPERATURE,
     SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
     HVACMode,
 )
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE, STATE_UNAVAILABLE
@@ -234,3 +236,104 @@ async def test_unavailable_when_polling_fails(
     await hass.async_block_till_done()
 
     assert hass.states.get(ENTITY_ID).state == STATE_UNAVAILABLE
+
+
+async def test_set_temperature_validates_before_changing_mode(
+    hass: HomeAssistant, setup_integration: MagicMock
+) -> None:
+    """hvac_mode=heat_cool with a single target fails without touching the mode."""
+    with pytest.raises(ServiceValidationError):
+        await _call(
+            hass,
+            SERVICE_SET_TEMPERATURE,
+            **{ATTR_HVAC_MODE: HVACMode.HEAT_COOL, ATTR_TEMPERATURE: 72},
+        )
+
+    setup_integration.async_set_mode.assert_not_awaited()
+    setup_integration.async_set_target_temperature.assert_not_awaited()
+    assert hass.states.get(ENTITY_ID).state == HVACMode.HEAT
+
+
+async def test_set_temperature_with_mode_change(
+    hass: HomeAssistant, setup_integration: MagicMock
+) -> None:
+    """hvac_mode=cool plus a target sends the mode, then the setpoint."""
+    await _call(
+        hass, SERVICE_SET_TEMPERATURE, **{ATTR_HVAC_MODE: HVACMode.COOL, ATTR_TEMPERATURE: 76}
+    )
+
+    assert setup_integration.async_set_mode.call_args.args[1] is ThermostatMode.COOL
+    sent = setup_integration.async_set_target_temperature.call_args.args[1]
+    assert sent == Temperature(76.0, F)
+    state = hass.states.get(ENTITY_ID)
+    assert state.state == HVACMode.COOL
+    assert state.attributes[ATTR_TEMPERATURE] == 76
+
+
+async def _setup_with_state(
+    hass: HomeAssistant, entry: MockConfigEntry, client: MagicMock, state
+) -> None:
+    client.async_get_state.return_value = state
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_turn_on_shown_even_if_mode_change_fails(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_auth: MagicMock,
+    mock_client: MagicMock,
+) -> None:
+    """turnOn succeeded, setThermostatMode failed: the entity is no longer off."""
+    heat = parse_thermostat_state(load_fixture("state_heat.json"))
+    await _setup_with_state(hass, mock_config_entry, mock_client, heat.evolve(power_on=False))
+    mock_client.async_set_mode.side_effect = AlexaCommandError("no", ["BAD_REQUEST"])
+
+    with pytest.raises(HomeAssistantError):
+        await _call(hass, SERVICE_SET_HVAC_MODE, **{ATTR_HVAC_MODE: HVACMode.COOL})
+
+    mock_client.async_turn_on.assert_awaited_once()
+    assert hass.states.get(ENTITY_ID).state == HVACMode.HEAT
+
+
+async def test_no_power_on_without_turn_on_support(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_auth: MagicMock,
+    mock_client: MagicMock,
+) -> None:
+    """Without turnOn, no power command is sent and power is not faked as on."""
+    devices = mock_client.async_get_thermostats.return_value
+    mock_client.async_get_thermostats.return_value = [
+        replace(devices[0], operations=devices[0].operations - {"turnOn"})
+    ]
+    heat = parse_thermostat_state(load_fixture("state_heat.json"))
+    await _setup_with_state(hass, mock_config_entry, mock_client, heat.evolve(power_on=False))
+
+    await _call(hass, SERVICE_SET_HVAC_MODE, **{ATTR_HVAC_MODE: HVACMode.COOL})
+
+    mock_client.async_turn_on.assert_not_awaited()
+    assert hass.states.get(ENTITY_ID).state == HVACMode.OFF
+
+
+async def test_eco_with_unknown_previous_mode(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_auth: MagicMock,
+    mock_client: MagicMock,
+) -> None:
+    """Starting in ECO, leaving the preset needs an explicit mode; turn_on uses heat/cool."""
+    heat = parse_thermostat_state(load_fixture("state_heat.json"))
+    await _setup_with_state(
+        hass, mock_config_entry, mock_client, heat.evolve(mode=ThermostatMode.ECO)
+    )
+    assert hass.states.get(ENTITY_ID).attributes[ATTR_PRESET_MODE] == PRESET_ECO
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _call(hass, SERVICE_SET_PRESET_MODE, **{ATTR_PRESET_MODE: PRESET_NONE})
+    assert err.value.translation_key == "unknown_previous_mode"
+    mock_client.async_set_mode.assert_not_awaited()
+
+    await _call(hass, SERVICE_TURN_ON)
+    assert mock_client.async_set_mode.call_args.args[1] is ThermostatMode.AUTO

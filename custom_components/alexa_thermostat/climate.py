@@ -73,7 +73,8 @@ class AlexaThermostatClimate(CoordinatorEntity[AlexaThermostatCoordinator], Clim
         """Initialize the entity."""
         super().__init__(coordinator)
         self._device = device
-        self._last_active_mode = ThermostatMode.AUTO
+        # None until a HEAT, COOL or AUTO mode has been seen (the first poll may be ECO).
+        self._last_active_mode: ThermostatMode | None = None
         self._remember_active_mode()
         self._attr_unique_id = device.endpoint_id
         self._attr_device_info = DeviceInfo(
@@ -220,15 +221,20 @@ class AlexaThermostatClimate(CoordinatorEntity[AlexaThermostatCoordinator], Clim
         state = self._state
         if state and state.power_on is False and self._device.supports(Operation.TURN_ON):
             await self._run(client.async_turn_on(self._device))
+            # Show the partial success even if the mode change below fails.
+            self.coordinator.apply_optimistic(self._device.endpoint_id, power_on=True)
         await self._run(client.async_set_mode(self._device, target))
         self._last_active_mode = target
-        self.coordinator.apply_optimistic(
-            self._device.endpoint_id, mode=target, **self._power_on_change()
-        )
+        self.coordinator.apply_optimistic(self._device.endpoint_id, mode=target)
 
     async def async_turn_on(self) -> None:
-        """Turn the thermostat on in its last active mode."""
-        await self.async_set_hvac_mode(ALEXA_TO_HVAC[self._last_active_mode])
+        """Turn the thermostat on in its last active mode.
+
+        With no known previous mode, heat/cool (Alexa AUTO) is used so the
+        thermostat decides between heating and cooling.
+        """
+        mode = self._last_active_mode or ThermostatMode.AUTO
+        await self.async_set_hvac_mode(ALEXA_TO_HVAC[mode])
 
     async def async_turn_off(self) -> None:
         """Turn the thermostat off."""
@@ -237,17 +243,32 @@ class AlexaThermostatClimate(CoordinatorEntity[AlexaThermostatCoordinator], Clim
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Enter or leave ECO mode."""
         target = ThermostatMode.ECO if preset_mode == PRESET_ECO else self._last_active_mode
+        if target is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="unknown_previous_mode"
+            )
         await self._run(self.coordinator.client.async_set_mode(self._device, target))
         self.coordinator.apply_optimistic(self._device.endpoint_id, mode=target)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set one setpoint, or both in heat/cool mode."""
-        if (hvac_mode := kwargs.get(ATTR_HVAC_MODE)) is not None:
+        hvac_mode = kwargs.get(ATTR_HVAC_MODE)
+        low, high = kwargs.get(ATTR_TARGET_TEMP_LOW), kwargs.get(ATTR_TARGET_TEMP_HIGH)
+        temperature = kwargs.get(ATTR_TEMPERATURE)
+        has_range = low is not None and high is not None
+
+        # Validate before sending anything, so a bad call never half-applies.
+        mode_after = HVAC_TO_ALEXA[hvac_mode] if hvac_mode is not None else self._alexa_mode
+        if not has_range and temperature is not None and mode_after == ThermostatMode.AUTO:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="single_setpoint_in_auto"
+            )
+
+        if hvac_mode is not None:
             await self.async_set_hvac_mode(hvac_mode)
 
         client = self.coordinator.client
-        low, high = kwargs.get(ATTR_TARGET_TEMP_LOW), kwargs.get(ATTR_TARGET_TEMP_HIGH)
-        if low is not None and high is not None:
+        if has_range:
             lower, upper = self._temperature(low), self._temperature(high)
             await self._run(client.async_set_temperature_range(self._device, lower, upper))
             self.coordinator.apply_optimistic(
@@ -255,19 +276,11 @@ class AlexaThermostatClimate(CoordinatorEntity[AlexaThermostatCoordinator], Clim
             )
             return
 
-        if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
+        if temperature is None:
             return
-        if self._alexa_mode == ThermostatMode.AUTO:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="single_setpoint_in_auto"
-            )
         target = self._temperature(temperature)
         await self._run(client.async_set_target_temperature(self._device, target))
         self.coordinator.apply_optimistic(self._device.endpoint_id, target_setpoint=target)
-
-    def _power_on_change(self) -> dict[str, bool]:
-        state = self._state
-        return {"power_on": True} if state and state.power_on is False else {}
 
     def _temperature(self, value: float) -> Temperature:
         """Round to the thermostat step; Alexa wants a number, never a string."""

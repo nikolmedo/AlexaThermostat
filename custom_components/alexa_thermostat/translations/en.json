@@ -40,6 +40,7 @@
     },
     "error": {
       "invalid_auth": "Amazon rejected the email or password.",
+      "invalid_domain": "Enter an Amazon domain such as amazon.com, amazon.de or amazon.co.uk.",
       "invalid_otp_secret": "The 2FA app key is not valid. Copy it again from Amazon without spaces.",
       "cannot_connect": "Could not reach Amazon. Check your connection and try again.",
       "unsupported_challenge": "Amazon asked for a verification step this integration cannot show yet (for example approving the sign-in in the Amazon app). Approve it if asked, or add a 2FA app key, then try again.",
@@ -48,6 +49,7 @@
     "abort": {
       "already_configured": "This Amazon account is already configured.",
       "reauth_successful": "Signed in again successfully.",
+      "cannot_connect": "Signed in, but Amazon did not return your devices. Try again in a few minutes.",
       "no_thermostats": "No thermostat was found on this Amazon account. Make sure it shows up in the Alexa app."
     }
   },
@@ -65,6 +67,7 @@
     }
   },
   "exceptions": {
+    "unknown_previous_mode": "The thermostat is in Eco mode and its previous mode is not known yet. Choose heat, cool or heat/cool instead.",
     "single_setpoint_in_auto": "The thermostat is in heat/cool mode. Set the low and high temperatures instead of a single target.",
     "command_rejected": "Alexa rejected the command ({codes}).",
     "auth_failed": "The Amazon session expired. Sign in again from the integration page.",

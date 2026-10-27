@@ -252,3 +252,64 @@ async def test_options_flow(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert mock_config_entry.options == {CONF_SCAN_INTERVAL: 120}
+
+
+@pytest.mark.parametrize("domain", ["evil.example.com", "amazon.com.attacker.io", "amaz0n.com"])
+async def test_invalid_domain_is_rejected(
+    hass: HomeAssistant, flow_auth: MagicMock, domain: str
+) -> None:
+    """Only Amazon domains are used as the login host."""
+    result = await _start(hass, {**USER_INPUT, CONF_AMAZON_DOMAIN: domain})
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_AMAZON_DOMAIN: "invalid_domain"}
+    flow_auth.assert_not_called()
+
+
+@pytest.mark.parametrize("domain", ["amazon.co.uk", "amazon.com.mx", "amazon.de"])
+async def test_regional_domains_are_accepted(
+    hass: HomeAssistant,
+    flow_auth: MagicMock,
+    flow_client: MagicMock,
+    no_setup: None,
+    domain: str,
+) -> None:
+    """Regional Amazon domains pass validation."""
+    result = await _start(hass, {**USER_INPUT, CONF_AMAZON_DOMAIN: domain})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_failed_login_closes_session(
+    hass: HomeAssistant, flow_auth: MagicMock, flow_client: MagicMock
+) -> None:
+    """A login error on the first form closes the alexapy session."""
+    flow_auth.return_value.async_login.side_effect = AlexaAuthError("nope")
+    await _start(hass)
+
+    flow_auth.return_value.async_close.assert_awaited_once()
+
+
+async def test_abandoned_challenge_closes_session(
+    hass: HomeAssistant, flow_auth: MagicMock, flow_client: MagicMock
+) -> None:
+    """Closing the dialog on the OTP step closes the alexapy session."""
+    flow_auth.return_value.async_login.side_effect = AlexaLoginChallenge(CHALLENGE_SECURITY_CODE)
+    result = await _start(hass)
+    assert result["step_id"] == "security_code"
+    flow_auth.return_value.async_close.assert_not_awaited()
+
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    await hass.async_block_till_done()
+    flow_auth.return_value.async_close.assert_awaited_once()
+
+
+async def test_discovery_failure_aborts(
+    hass: HomeAssistant, flow_auth: MagicMock, flow_client: MagicMock
+) -> None:
+    """Signed in but no device list: abort and close the session."""
+    flow_client.async_get_thermostats.side_effect = AlexaConnectionError("down")
+    result = await _start(hass)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "cannot_connect"
+    flow_auth.return_value.async_close.assert_awaited()

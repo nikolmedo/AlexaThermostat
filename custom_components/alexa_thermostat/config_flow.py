@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import logging
+import re
 from typing import Any
 
 from homeassistant.config_entries import (
@@ -57,6 +58,10 @@ from .coordinator import AlexaThermostatConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
+# The region is used as the login and API host, so only Amazon retail domains
+# are accepted (amazon.com, amazon.de, amazon.co.uk, amazon.com.mx, ...).
+AMAZON_DOMAIN_PATTERN = re.compile(r"amazon\.(?:[a-z]{2,3}|co\.[a-z]{2}|com\.[a-z]{2})")
+
 PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
 USER_SCHEMA = vol.Schema(
@@ -109,11 +114,14 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._email = user_input[CONF_EMAIL].strip()
             self._amazon_domain = user_input[CONF_AMAZON_DOMAIN].strip().lower()
-            await self.async_set_unique_id(f"{self._amazon_domain}:{self._email.lower()}")
-            self._abort_if_unique_id_configured()
-            result = await self._async_start_login(user_input, errors)
-            if result is not None:
-                return result
+            if not AMAZON_DOMAIN_PATTERN.fullmatch(self._amazon_domain):
+                errors[CONF_AMAZON_DOMAIN] = "invalid_domain"
+            else:
+                await self.async_set_unique_id(f"{self._amazon_domain}:{self._email.lower()}")
+                self._abort_if_unique_id_configured()
+                result = await self._async_start_login(user_input, errors)
+                if result is not None:
+                    return result
 
         return self.async_show_form(
             step_id="user",
@@ -205,7 +213,13 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         except AlexaInvalidOtpSecret:
             errors[CONF_OTP_SECRET] = "invalid_otp_secret"
             return None
-        return await self._async_continue_login({CONF_PASSWORD: user_input[CONF_PASSWORD]}, errors)
+        result = await self._async_continue_login(
+            {CONF_PASSWORD: user_input[CONF_PASSWORD]}, errors
+        )
+        if result is None:
+            # The form is shown again and the next submit starts a new login.
+            await self._async_close_auth()
+        return result
 
     async def _async_continue_login(
         self, data: dict[str, str], errors: dict[str, str]
@@ -238,8 +252,9 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         try:
             devices = await AlexaThermostatClient(self._auth).async_get_thermostats()
         except AlexaError:
-            errors["base"] = "cannot_connect"
-            return None
+            _LOGGER.debug("Signed in but could not list thermostats", exc_info=True)
+            await self._async_close_auth()
+            return self.async_abort(reason="cannot_connect")
 
         data = {
             CONF_EMAIL: self._email,
@@ -254,6 +269,13 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         if not devices:
             return self.async_abort(reason="no_thermostats")
         return self.async_create_entry(title=self._email, data=data)
+
+    @callback
+    def async_remove(self) -> None:
+        """Close the Amazon session when the flow is abandoned."""
+        if self._auth is not None:
+            self.hass.async_create_task(self._auth.async_close())
+            self._auth = None
 
     async def _async_close_auth(self) -> None:
         if self._auth is not None:

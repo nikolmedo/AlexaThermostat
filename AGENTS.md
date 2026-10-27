@@ -52,6 +52,7 @@ scripts/generate_icon.py  Regenerates brand/ and assets/ PNGs with Pillow
 setup:   AlexaAuth.async_resume() (refresh token) -> client.async_get_thermostats()
          -> coordinator first refresh -> one AlexaThermostatClimate per device
 poll:    coordinator._async_update_data -> client.async_get_state(endpoint_id) per device
+         (a failing device is left out and goes unavailable; only all-failed is UpdateFailed)
 command: climate.async_set_* -> client.async_set_* -> raise_for_command_errors
          -> coordinator.apply_optimistic(endpoint_id, field=value)
 ```
@@ -137,6 +138,16 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
 - **AUTO is HA's `heat_cool`**, with low/high setpoints. A single `temperature` in AUTO raises
   `ServiceValidationError` (`single_setpoint_in_auto`). ECO is a preset, not an HVAC mode.
 - **Rounding:** Fahrenheit setpoints are rounded to whole degrees, Celsius to 0.5.
+- **Validate before sending.** `async_set_temperature` checks the arguments (including an
+  `hvac_mode` change) before any command, so a rejected call never half-applies.
+- **ECO with no known previous mode** (first poll is ECO): leaving the preset raises
+  `unknown_previous_mode`; `turn_on` falls back to AUTO (heat/cool).
+- **Amazon region is validated** against `AMAZON_DOMAIN_PATTERN` in `config_flow.py` because it
+  becomes the login and API host.
+- **Humidity** is a generic `range` feature found by a localized friendly name; the parser matches
+  keywords (`HUMIDITY_KEYWORDS`). Add a keyword when a region's name is missed.
+- **Config flow sessions** are closed on failed logins, on discovery failure (abort) and in
+  `async_remove` when the user abandons the dialog.
 
 ## Unverified against a real device
 
@@ -162,6 +173,7 @@ python scripts/generate_icon.py    # only when changing the icon (needs Pillow)
 ```
 
 CI runs the same steps plus the HACS action and hassfest on every push and pull request.
+Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`) bumps them.
 
 ## Conventions
 

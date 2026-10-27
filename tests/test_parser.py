@@ -118,3 +118,27 @@ def test_temperature_conversion() -> None:
     assert Temperature(20, TemperatureScale.CELSIUS).to(TemperatureScale.FAHRENHEIT).value == (
         pytest.approx(68)
     )
+
+
+@pytest.mark.parametrize("name", ["Luftfeuchtigkeit", "Humidité intérieure", "室内湿度"])
+def test_localized_humidity_name(name: str) -> None:
+    """Humidity is found when Amazon localizes the range name."""
+    response = {
+        "data": {
+            "endpoint": {
+                "features": [
+                    {
+                        "name": "range",
+                        "properties": [{"name": "rangeValue", "rangeValue": {"value": 55}}],
+                        "configuration": {"friendlyName": {"value": {"text": name}}},
+                    },
+                    {
+                        "name": "range",
+                        "properties": [{"name": "rangeValue", "rangeValue": {"value": 3}}],
+                        "configuration": {"friendlyName": {"value": {"text": "Fan speed"}}},
+                    },
+                ]
+            }
+        }
+    }
+    assert parse_thermostat_state(response).humidity == 55

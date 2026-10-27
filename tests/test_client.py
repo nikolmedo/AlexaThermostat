@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 import json
 from typing import Any
 
@@ -44,7 +43,12 @@ class FakeResponse:
 
 
 class FakeSession:
-    """Records POSTs and replays queued responses (or exceptions)."""
+    """Records POSTs and replays queued responses (or exceptions).
+
+    Queued items are consumed in order, except the last one, which is
+    replayed for every further call. That lets a test queue a single 401 to
+    mean "always 401", or a single success for several commands.
+    """
 
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
@@ -79,7 +83,7 @@ class FakeAuth:
 
 
 @pytest.fixture
-def auth() -> Iterator[FakeAuth]:
+def auth() -> FakeAuth:
     """Return a fake auth."""
     return FakeAuth()
 

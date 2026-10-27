@@ -19,7 +19,10 @@ from .models import (
 )
 
 THERMOSTAT_CATEGORY = "THERMOSTAT"
-HUMIDITY_RANGE_NAME = "indoor humidity"
+# Alexa exposes indoor humidity as a generic "range" feature identified only by
+# its friendly name, which Amazon localizes per region ("Indoor humidity",
+# "Luftfeuchtigkeit", "Humidité", ...). Match by keyword, best effort.
+HUMIDITY_KEYWORDS = ("humid", "feucht", "humed", "umid", "vochtig", "湿度")
 
 
 def raise_for_graphql_errors(response: dict[str, Any]) -> None:
@@ -147,7 +150,10 @@ def _mode(raw: str) -> ThermostatMode | None:
 
 def _is_humidity(feature: dict[str, Any]) -> bool:
     name = _dig(feature, "configuration", "friendlyName", "value", "text")
-    return isinstance(name, str) and name.strip().lower() == HUMIDITY_RANGE_NAME
+    if not isinstance(name, str):
+        return False
+    lowered = name.casefold()
+    return any(keyword in lowered for keyword in HUMIDITY_KEYWORDS)
 
 
 def _number(value: Any) -> float | None:

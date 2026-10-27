@@ -72,14 +72,21 @@ class AlexaThermostatCoordinator(DataUpdateCoordinator[dict[str, ThermostatState
 
     async def _async_update_data(self) -> dict[str, ThermostatState]:
         states: dict[str, ThermostatState] = {}
-        try:
-            for endpoint_id in self.devices:
+        errors: list[AlexaError] = []
+        for endpoint_id in self.devices:
+            try:
                 fetched = await self.client.async_get_state(endpoint_id)
-                states[endpoint_id] = self._merge_pending(endpoint_id, fetched)
-        except AlexaAuthError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
-        except AlexaError as err:
-            raise UpdateFailed(str(err)) from err
+            except AlexaAuthError as err:
+                raise ConfigEntryAuthFailed(str(err)) from err
+            except AlexaError as err:
+                # Leave this thermostat out (its entity becomes unavailable)
+                # instead of failing the update for every thermostat.
+                _LOGGER.debug("Could not read %s: %s", endpoint_id, err)
+                errors.append(err)
+                continue
+            states[endpoint_id] = self._merge_pending(endpoint_id, fetched)
+        if errors and not states:
+            raise UpdateFailed(str(errors[0])) from errors[0]
         return states
 
     def apply_optimistic(self, endpoint_id: str, **changes: Any) -> None:
