@@ -16,6 +16,7 @@ from custom_components.alexa_thermostat.api import (
     CHALLENGE_CAPTCHA,
     CHALLENGE_SECURITY_CODE,
     CHALLENGE_UNSUPPORTED,
+    AlexaAuth,
     AlexaAuthError,
     AlexaConnectionError,
     AlexaInvalidOtpSecret,
@@ -239,6 +240,31 @@ async def test_reauth_keeps_device_uuid(
     assert mock_config_entry.data[CONF_TOKENS] == new_tokens
 
 
+async def test_reauth_with_one_time_code(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    flow_auth: MagicMock,
+    flow_client: MagicMock,
+    no_setup: None,
+) -> None:
+    """A 6-digit code during reauth is used once and never stored in the entry."""
+    mock_config_entry.add_to_hass(hass)
+    stored_before = dict(mock_config_entry.data)
+
+    result = await mock_config_entry.start_reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PASSWORD: "new-secret", CONF_OTP_SECRET: "246802"}
+    )
+
+    assert result["reason"] == "reauth_successful"
+    assert flow_auth.call_args.kwargs["otp_secret"] == ""
+    flow_auth.return_value.async_login.assert_awaited_once_with(
+        {CONF_PASSWORD: "new-secret", "securitycode": "246802"}
+    )
+    assert set(mock_config_entry.data) == set(stored_before)
+    assert "246802" not in str(mock_config_entry.data)
+
+
 async def test_options_flow(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, no_setup: None
 ) -> None:
@@ -313,3 +339,44 @@ async def test_discovery_failure_aborts(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "cannot_connect"
     flow_auth.return_value.async_close.assert_awaited()
+
+
+async def test_otp_key_with_invisible_characters(
+    hass: HomeAssistant, flow_auth: MagicMock, flow_client: MagicMock, no_setup: None
+) -> None:
+    """A key copied from Amazon on a phone (non-breaking spaces) is cleaned."""
+    pasted_key = "abcd\u00a0efgh\u00a0ijkl\u200bmnop\n"
+    result = await _start(hass, {**USER_INPUT, CONF_OTP_SECRET: pasted_key})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert flow_auth.call_args.kwargs["otp_secret"] == "ABCDEFGHIJKLMNOP"
+    flow_auth.return_value.async_login.assert_awaited_once_with({CONF_PASSWORD: "secret"})
+
+
+async def test_one_time_code_in_key_field(
+    hass: HomeAssistant, flow_auth: MagicMock, flow_client: MagicMock, no_setup: None
+) -> None:
+    """A 6-digit code typed in the key field is used as this login's code."""
+    result = await _start(hass, {**USER_INPUT, CONF_OTP_SECRET: "123 456"})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert flow_auth.call_args.kwargs["otp_secret"] == ""
+    flow_auth.return_value.async_login.assert_awaited_once_with(
+        {CONF_PASSWORD: "secret", "securitycode": "123456"}
+    )
+    # The single-use code must never be persisted as a long-lived secret.
+    assert CONF_OTP_SECRET not in result["data"]
+    assert "123456" not in str(result["data"])
+    assert result["result"].options == {}
+
+
+@pytest.mark.parametrize("pasted", ["ABCD EFGH ÉJKL MNOP", "ABCD EFGH"])
+async def test_invalid_key_through_real_validation(
+    hass: HomeAssistant, flow_auth: MagicMock, pasted: str
+) -> None:
+    """A bad key goes through the real normalize + validation and is reported."""
+    flow_auth.side_effect = AlexaAuth
+    result = await _start(hass, {**USER_INPUT, CONF_OTP_SECRET: pasted})
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_OTP_SECRET: "invalid_otp_secret"}

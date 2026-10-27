@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+import re
 from typing import Any
+import unicodedata
 
 from aiohttp import ClientSession
 from alexapy import AlexaLogin
@@ -38,6 +40,33 @@ TOKEN_KEYS = ("access_token", "refresh_token", "mac_dms", "expires_in")
 CHALLENGE_SECURITY_CODE = "securitycode"
 CHALLENGE_CAPTCHA = "captcha"
 CHALLENGE_UNSUPPORTED = "unsupported"
+
+ONE_TIME_CODE = re.compile(r"\d{6,8}", re.ASCII)
+# Amazon's authenticator keys are 52 characters; anything under 16 is a partial paste.
+BASE32_KEY = re.compile(r"[A-Z2-7]{16,}=*")
+
+
+def normalize_otp_input(value: str | None) -> str:
+    """Clean an authenticator key or code pasted by the user.
+
+    Amazon shows the key in groups of four. Copying it (especially on a phone)
+    can bring non-breaking spaces, zero-width characters, newlines or dashes,
+    which pyotp rejects as invalid base32. Only those separators are removed:
+    any other unexpected character is kept so the key fails validation with a
+    clear error instead of silently producing wrong codes.
+    """
+    if not value:
+        return ""
+    return "".join(
+        char
+        for char in value
+        if not char.isspace() and char not in "-_" and unicodedata.category(char) != "Cf"
+    ).upper()
+
+
+def is_one_time_code(value: str) -> bool:
+    """Return True for a 6-8 digit code (as opposed to an authenticator key)."""
+    return bool(ONE_TIME_CODE.fullmatch(value))
 
 
 def isolate_storage(outputpath: Callable[[str], str], prefix: str) -> Callable[[str], str]:
@@ -71,6 +100,10 @@ class AlexaAuth:
     ) -> None:
         """Create the alexapy login object without doing any I/O."""
         self._domain = domain
+        # pyotp raises ValueError (which alexapy does not catch) for non-ASCII
+        # keys, so check the base32 alphabet before handing the key over.
+        if otp_secret and not BASE32_KEY.fullmatch(otp_secret.upper()):
+            raise AlexaInvalidOtpSecret("The 2FA app key is not valid base32")
         try:
             self._login = AlexaLogin(
                 url=domain,

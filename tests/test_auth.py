@@ -18,7 +18,11 @@ from custom_components.alexa_thermostat.api import (
     AlexaInvalidOtpSecret,
     AlexaLoginChallenge,
 )
-from custom_components.alexa_thermostat.api.auth import isolate_storage
+from custom_components.alexa_thermostat.api.auth import (
+    is_one_time_code,
+    isolate_storage,
+    normalize_otp_input,
+)
 
 
 @pytest.fixture
@@ -141,3 +145,63 @@ async def test_resume_requires_successful_refresh(alexa_login: MagicMock) -> Non
     alexa_login.return_value.refresh_token = None
     with pytest.raises(AlexaAuthError, match="No refresh token"):
         await _auth().async_resume()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("abcd efgh ijkl mnop", "ABCDEFGHIJKLMNOP"),
+        ("ABCD\u00a0EFGH\u00a0IJKL", "ABCDEFGHIJKL"),
+        (" ABCD\u200bEFGH\nIJKL\t", "ABCDEFGHIJKL"),
+        ("abcd-efgh-ijkl", "ABCDEFGHIJKL"),
+        # Unexpected characters are kept so validation can reject the key.
+        ("abcdéfgh", "ABCDÉFGH"),
+        ("", ""),
+    ],
+)
+def test_normalize_otp_input(raw: str, expected: str) -> None:
+    """Keys pasted from Amazon (often on a phone) are cleaned before use."""
+    assert normalize_otp_input(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("123456", True), ("12345678", True), ("12345", False), ("ABCDEFGH", False)],
+)
+def test_is_one_time_code(value: str, expected: bool) -> None:
+    """A 6-8 digit value is a one-time code, not an authenticator key."""
+    assert is_one_time_code(value) is expected
+
+
+async def test_login_forwards_security_code(alexa_login: MagicMock) -> None:
+    """The one-time code reaches alexapy, which fills Amazon's OTP field with it."""
+    alexa_login.return_value.status = {"login_successful": True}
+    await _auth(password="pw").async_login({"password": "pw", "securitycode": "123456"})
+
+    alexa_login.return_value.login.assert_awaited_once_with(
+        data={"password": "pw", "securitycode": "123456"}
+    )
+
+
+def test_key_with_unexpected_characters_is_rejected() -> None:
+    """A look-alike character reaches pyotp and fails instead of being dropped."""
+    with pytest.raises(AlexaInvalidOtpSecret):
+        AlexaAuth(
+            "amazon.com",
+            "user@example.com",
+            lambda path: path,
+            otp_secret=normalize_otp_input("ABCD EFGH ÉJKL MNOP"),
+        )
+
+
+def test_full_width_digits_are_not_a_one_time_code() -> None:
+    """Digits typed with a phone IME in full width are not treated as a code."""
+    full_width_123456 = "".join(chr(0xFF11 + offset) for offset in range(6))
+    assert is_one_time_code(full_width_123456) is False
+
+
+@pytest.mark.parametrize("key", ["ABCDEFGH", "234567234"])
+def test_too_short_key_is_rejected(key: str) -> None:
+    """A partial paste is reported instead of generating wrong codes."""
+    with pytest.raises(AlexaInvalidOtpSecret):
+        AlexaAuth("amazon.com", "user@example.com", lambda path: path, otp_secret=key)

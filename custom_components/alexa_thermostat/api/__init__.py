@@ -10,6 +10,8 @@ from .auth import (
     CHALLENGE_SECURITY_CODE,
     CHALLENGE_UNSUPPORTED,
     AlexaAuth,
+    is_one_time_code,
+    normalize_otp_input,
 )
 from .client import AlexaThermostatClient, setpoint_payload
 from .exceptions import (
@@ -49,5 +51,7 @@ __all__ = [
     "ThermostatDevice",
     "ThermostatMode",
     "ThermostatState",
+    "is_one_time_code",
+    "normalize_otp_input",
     "setpoint_payload",
 ]
