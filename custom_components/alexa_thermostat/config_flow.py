@@ -144,7 +144,10 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         if len(sessions) == 1:
             return await self._async_use_alexa_media(next(iter(sessions.values())))
         if user_input is not None:
-            return await self._async_use_alexa_media(sessions[user_input[CONF_ACCOUNT]])
+            if (chosen := sessions.get(user_input[CONF_ACCOUNT])) is None:
+                # The account was removed or signed out while the form was open.
+                return self.async_abort(reason="alexa_media_not_found")
+            return await self._async_use_alexa_media(chosen)
 
         options = [
             SelectOptionDict(value=entry_id, label=f"{session.email} ({session.amazon_domain})")
@@ -159,7 +162,7 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _async_use_alexa_media(self, session: AlexaMediaSession) -> ConfigFlowResult:
         if not AMAZON_DOMAIN_PATTERN.fullmatch(session.amazon_domain):
-            return self.async_abort(reason="alexa_media_session_invalid")
+            return self._alexa_media_failed("alexa_media_session_invalid")
         self._email = session.email
         self._amazon_domain = session.amazon_domain
         if self.source != SOURCE_REAUTH:
@@ -178,11 +181,22 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
             await self._auth.async_resume()
         except AlexaAuthError:
             await self._async_close_auth()
-            return self.async_abort(reason="alexa_media_session_invalid")
+            return self._alexa_media_failed("alexa_media_session_invalid")
         except AlexaConnectionError:
             await self._async_close_auth()
-            return self.async_abort(reason="cannot_connect")
+            return self._alexa_media_failed("alexa_media_cannot_connect")
         return await self._async_finish_login()
+
+    def _alexa_media_failed(self, reason: str) -> ConfigFlowResult:
+        """Abort a new setup, or fall back to the password form during reauth."""
+        if self.source == SOURCE_REAUTH:
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=REAUTH_SCHEMA,
+                errors={"base": reason},
+                description_placeholders={"email": self._email},
+            )
+        return self.async_abort(reason=reason)
 
     async def _async_credentials_step(
         self, step_id: str, user_input: dict[str, Any] | None

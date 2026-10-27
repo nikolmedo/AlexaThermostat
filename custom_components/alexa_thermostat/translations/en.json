@@ -77,7 +77,9 @@
       "invalid_otp_secret": "The 2FA app key is not valid. Paste the long key Amazon shows under \"Can't scan the barcode?\" (about 52 letters and digits 2-7), not an email or SMS code.",
       "cannot_connect": "Could not reach Amazon. Check your connection and try again.",
       "unsupported_challenge": "Amazon asked for a verification step this integration cannot show yet (for example approving the sign-in in the Amazon app). Approve it if asked, or add a 2FA app key, then try again.",
-      "unknown": "Unexpected error. Check the logs for details."
+      "unknown": "Unexpected error. Check the logs for details.",
+      "alexa_media_session_invalid": "Alexa Media Player's Amazon session is not valid anymore. Sign in again in Alexa Media Player, then try again. You can also sign in with your password below.",
+      "alexa_media_cannot_connect": "Could not reach Amazon to reuse Alexa Media Player's session. Try again later, or sign in with your password below."
     },
     "abort": {
       "already_configured": "This Amazon account is already configured.",
@@ -85,7 +87,8 @@
       "cannot_connect": "Signed in, but Amazon did not return your devices. Try again in a few minutes.",
       "no_thermostats": "No thermostat was found on this Amazon account. Make sure it shows up in the Alexa app.",
       "alexa_media_not_found": "No signed-in Alexa Media Player account was found.",
-      "alexa_media_session_invalid": "Alexa Media Player's Amazon session is not valid anymore. Sign in again in Alexa Media Player, then try again."
+      "alexa_media_session_invalid": "Alexa Media Player's Amazon session is not valid anymore. Sign in again in Alexa Media Player, then try again.",
+      "alexa_media_cannot_connect": "Could not reach Amazon to reuse Alexa Media Player's session. Try again in a few minutes."
     }
   },
   "options": {
