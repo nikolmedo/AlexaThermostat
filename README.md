@@ -11,10 +11,10 @@
 
 <p align="center">
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS Custom"></a>
-  <a href="https://github.com/nikolmedo/HACS-AlexaThermostat/releases"><img src="https://img.shields.io/github/v/release/nikolmedo/HACS-AlexaThermostat?include_prereleases" alt="Release"></a>
-  <a href="https://github.com/nikolmedo/HACS-AlexaThermostat/actions/workflows/validate.yml"><img src="https://github.com/nikolmedo/HACS-AlexaThermostat/actions/workflows/validate.yml/badge.svg" alt="Validate"></a>
-  <a href="https://github.com/nikolmedo/HACS-AlexaThermostat/actions/workflows/tests.yml"><img src="https://github.com/nikolmedo/HACS-AlexaThermostat/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/nikolmedo/HACS-AlexaThermostat" alt="License"></a>
+  <a href="https://github.com/nikolmedo/AlexaThermostat/releases"><img src="https://img.shields.io/github/v/release/nikolmedo/AlexaThermostat?include_prereleases" alt="Release"></a>
+  <a href="https://github.com/nikolmedo/AlexaThermostat/actions/workflows/validate.yml"><img src="https://github.com/nikolmedo/AlexaThermostat/actions/workflows/validate.yml/badge.svg" alt="Validate"></a>
+  <a href="https://github.com/nikolmedo/AlexaThermostat/actions/workflows/tests.yml"><img src="https://github.com/nikolmedo/AlexaThermostat/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/nikolmedo/AlexaThermostat" alt="License"></a>
 </p>
 
 The Amazon Smart Thermostat only talks to Alexa. There is no local API, no Matter support and no
@@ -53,10 +53,10 @@ standard thermostat card, automations, voice assistants and history.
 
 ### HACS (recommended)
 
-[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=nikolmedo&repository=HACS-AlexaThermostat&category=integration)
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=nikolmedo&repository=AlexaThermostat&category=integration)
 
 1. Click the button above, or in HACS open the menu in the top right corner, choose
-   **Custom repositories**, add `https://github.com/nikolmedo/HACS-AlexaThermostat` with the
+   **Custom repositories**, add `https://github.com/nikolmedo/AlexaThermostat` with the
    category **Integration**.
 2. Search for **Alexa Thermostat** and download it.
 3. Restart Home Assistant.
@@ -142,7 +142,7 @@ of a single target.
 
 **Something else.**
 Enable debug logging from the integration page, reproduce the problem, and
-[open an issue](https://github.com/nikolmedo/HACS-AlexaThermostat/issues/new/choose) with the
+[open an issue](https://github.com/nikolmedo/AlexaThermostat/issues/new/choose) with the
 logs and the diagnostics file.
 
 ## Known limitations
