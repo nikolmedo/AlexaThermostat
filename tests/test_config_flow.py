@@ -313,3 +313,28 @@ async def test_discovery_failure_aborts(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "cannot_connect"
     flow_auth.return_value.async_close.assert_awaited()
+
+
+async def test_otp_key_with_invisible_characters(
+    hass: HomeAssistant, flow_auth: MagicMock, flow_client: MagicMock, no_setup: None
+) -> None:
+    """A key copied from Amazon on a phone (non-breaking spaces) is cleaned."""
+    pasted_key = "abcd\u00a0efgh\u00a0ijkl\u200bmnop\n"
+    result = await _start(hass, {**USER_INPUT, CONF_OTP_SECRET: pasted_key})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert flow_auth.call_args.kwargs["otp_secret"] == "ABCDEFGHIJKLMNOP"
+    flow_auth.return_value.async_login.assert_awaited_once_with({CONF_PASSWORD: "secret"})
+
+
+async def test_one_time_code_in_key_field(
+    hass: HomeAssistant, flow_auth: MagicMock, flow_client: MagicMock, no_setup: None
+) -> None:
+    """A 6-digit code typed in the key field is used as this login's code."""
+    result = await _start(hass, {**USER_INPUT, CONF_OTP_SECRET: "123 456"})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert flow_auth.call_args.kwargs["otp_secret"] == ""
+    flow_auth.return_value.async_login.assert_awaited_once_with(
+        {CONF_PASSWORD: "secret", "securitycode": "123456"}
+    )

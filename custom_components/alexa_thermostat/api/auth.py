@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+import re
 from typing import Any
 
 from aiohttp import ClientSession
@@ -38,6 +39,25 @@ TOKEN_KEYS = ("access_token", "refresh_token", "mac_dms", "expires_in")
 CHALLENGE_SECURITY_CODE = "securitycode"
 CHALLENGE_CAPTCHA = "captcha"
 CHALLENGE_UNSUPPORTED = "unsupported"
+
+ONE_TIME_CODE = re.compile(r"\d{6,8}")
+
+
+def normalize_otp_input(value: str | None) -> str:
+    """Clean an authenticator key or code pasted by the user.
+
+    Amazon shows the key in groups of four. Copying it (especially on a phone)
+    can bring non-breaking spaces, zero-width characters, newlines or dashes,
+    which pyotp rejects as invalid base32.
+    """
+    if not value:
+        return ""
+    return "".join(char for char in value if char.isalnum() and char.isascii()).upper()
+
+
+def is_one_time_code(value: str) -> bool:
+    """Return True for a 6-8 digit code (as opposed to an authenticator key)."""
+    return bool(ONE_TIME_CODE.fullmatch(value))
 
 
 def isolate_storage(outputpath: Callable[[str], str], prefix: str) -> Callable[[str], str]:

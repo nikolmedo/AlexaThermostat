@@ -38,6 +38,8 @@ from .api import (
     AlexaInvalidOtpSecret,
     AlexaLoginChallenge,
     AlexaThermostatClient,
+    is_one_time_code,
+    normalize_otp_input,
 )
 from .const import (
     AMAZON_DOMAINS,
@@ -201,21 +203,26 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         reauth_uuid = None
         if self.source == SOURCE_REAUTH:
             reauth_uuid = self._get_reauth_entry().data.get(CONF_DEVICE_UUID)
+        otp_input = normalize_otp_input(user_input.get(CONF_OTP_SECRET))
+        login_data = {CONF_PASSWORD: user_input[CONF_PASSWORD]}
+        if is_one_time_code(otp_input):
+            # The user typed the current 6-digit code instead of the key:
+            # use it for this login only.
+            login_data["securitycode"] = otp_input
+            otp_input = ""
         try:
             self._auth = AlexaAuth(
                 self._amazon_domain,
                 self._email,
                 self.hass.config.path,
                 password=user_input[CONF_PASSWORD],
-                otp_secret=(user_input.get(CONF_OTP_SECRET) or "").replace(" ", ""),
+                otp_secret=otp_input,
                 device_uuid=reauth_uuid,
             )
         except AlexaInvalidOtpSecret:
             errors[CONF_OTP_SECRET] = "invalid_otp_secret"
             return None
-        result = await self._async_continue_login(
-            {CONF_PASSWORD: user_input[CONF_PASSWORD]}, errors
-        )
+        result = await self._async_continue_login(login_data, errors)
         if result is None:
             # The form is shown again and the next submit starts a new login.
             await self._async_close_auth()

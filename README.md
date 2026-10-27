@@ -85,7 +85,9 @@ generate those codes for you:
 
 1. On Amazon, open **Your Account > Login & security > 2-Step Verification**.
 2. Add a new authenticator app and choose **Can't scan the barcode?**.
-3. Copy the key Amazon shows and paste it in the **2FA app key** field during setup.
+3. Copy the key Amazon shows (a long string of letters and digits, spaces are fine) and paste it
+   in the **2FA app key** field during setup. Use the key, not a 6-digit code: a code typed there
+   only works for that one sign-in.
 4. Finish adding the app on Amazon with the code your phone app (or Home Assistant) shows.
 
 You only need this once. After the first sign-in the integration keeps the session alive with a

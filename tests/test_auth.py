@@ -18,7 +18,11 @@ from custom_components.alexa_thermostat.api import (
     AlexaInvalidOtpSecret,
     AlexaLoginChallenge,
 )
-from custom_components.alexa_thermostat.api.auth import isolate_storage
+from custom_components.alexa_thermostat.api.auth import (
+    is_one_time_code,
+    isolate_storage,
+    normalize_otp_input,
+)
 
 
 @pytest.fixture
@@ -141,3 +145,27 @@ async def test_resume_requires_successful_refresh(alexa_login: MagicMock) -> Non
     alexa_login.return_value.refresh_token = None
     with pytest.raises(AlexaAuthError, match="No refresh token"):
         await _auth().async_resume()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("abcd efgh ijkl mnop", "ABCDEFGHIJKLMNOP"),
+        ("ABCD\u00a0EFGH\u00a0IJKL", "ABCDEFGHIJKL"),
+        (" ABCD\u200bEFGH\nIJKL\t", "ABCDEFGHIJKL"),
+        ("abcd-efgh-ijkl", "ABCDEFGHIJKL"),
+        ("", ""),
+    ],
+)
+def test_normalize_otp_input(raw: str, expected: str) -> None:
+    """Keys pasted from Amazon (often on a phone) are cleaned before use."""
+    assert normalize_otp_input(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("123456", True), ("12345678", True), ("12345", False), ("ABCDEFGH", False)],
+)
+def test_is_one_time_code(value: str, expected: bool) -> None:
+    """A 6-8 digit value is a one-time code, not an authenticator key."""
+    assert is_one_time_code(value) is expected

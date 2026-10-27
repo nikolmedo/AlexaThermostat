@@ -12,7 +12,7 @@
         },
         "data_description": {
           "amazon_domain": "The Amazon site you use for Alexa, for example amazon.com or amazon.co.uk.",
-          "otp_secret": "Recommended. In Amazon's Two-Step Verification settings add a new authenticator app, choose \"Can't scan the barcode?\" and paste the key shown. Home Assistant will then generate the codes for you."
+          "otp_secret": "Recommended. In Amazon's Two-Step Verification settings add a new authenticator app, choose \"Can't scan the barcode?\" and paste the long key shown (spaces are fine). Home Assistant will then generate the codes for you. You can also type the current 6-digit code from your authenticator app to use it just for this sign-in."
         }
       },
       "reauth_confirm": {
@@ -41,7 +41,7 @@
     "error": {
       "invalid_auth": "Amazon rejected the email or password.",
       "invalid_domain": "Enter an Amazon domain such as amazon.com, amazon.de or amazon.co.uk.",
-      "invalid_otp_secret": "The 2FA app key is not valid. Copy it again from Amazon without spaces.",
+      "invalid_otp_secret": "The 2FA app key is not valid. Paste the long key Amazon shows under \"Can't scan the barcode?\" (about 52 letters and digits 2-7), not an email or SMS code.",
       "cannot_connect": "Could not reach Amazon. Check your connection and try again.",
       "unsupported_challenge": "Amazon asked for a verification step this integration cannot show yet (for example approving the sign-in in the Amazon app). Approve it if asked, or add a 2FA app key, then try again.",
       "unknown": "Unexpected error. Check the logs for details."
