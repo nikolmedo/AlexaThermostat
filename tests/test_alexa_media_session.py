@@ -259,6 +259,7 @@ async def test_reauth_with_alexa_media_session(
     result = await mock_config_entry.start_reauth_flow(hass)
     assert result["type"] is FlowResultType.MENU
     assert result["menu_options"] == ["alexa_media", "reauth_confirm"]
+    assert result["description_placeholders"]["email"] == EMAIL
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"next_step_id": "alexa_media"}
@@ -390,3 +391,24 @@ async def test_reauth_falls_back_to_password_form(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
     assert result["errors"] == {"base": "alexa_media_session_invalid"}
+
+
+async def test_reauth_connection_error_falls_back_to_password_form(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    flow_auth: MagicMock,
+    flow_client: MagicMock,
+) -> None:
+    """A throttled refresh during reauth also offers the password form."""
+    _amp_entry().add_to_hass(hass)
+    mock_config_entry.add_to_hass(hass)
+    flow_auth.return_value.async_resume.side_effect = AlexaConnectionError("throttled")
+
+    result = await mock_config_entry.start_reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "alexa_media"}
+    )
+
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {"base": "alexa_media_cannot_connect"}
+    assert result["description_placeholders"]["email"] == EMAIL

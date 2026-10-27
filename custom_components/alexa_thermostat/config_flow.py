@@ -236,7 +236,9 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
             for session in find_alexa_media_sessions(self.hass)
         ):
             return self.async_show_menu(
-                step_id="reauth", menu_options=["alexa_media", "reauth_confirm"]
+                step_id="reauth",
+                menu_options=["alexa_media", "reauth_confirm"],
+                description_placeholders={"email": self._email},
             )
         return await self.async_step_reauth_confirm()
 
