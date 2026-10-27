@@ -41,8 +41,9 @@ CHALLENGE_SECURITY_CODE = "securitycode"
 CHALLENGE_CAPTCHA = "captcha"
 CHALLENGE_UNSUPPORTED = "unsupported"
 
-ONE_TIME_CODE = re.compile(r"\d{6,8}")
-BASE32_KEY = re.compile(r"[A-Z2-7]+=*")
+ONE_TIME_CODE = re.compile(r"\d{6,8}", re.ASCII)
+# Amazon's authenticator keys are 52 characters; anything under 16 is a partial paste.
+BASE32_KEY = re.compile(r"[A-Z2-7]{16,}=*")
 
 
 def normalize_otp_input(value: str | None) -> str:

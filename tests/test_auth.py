@@ -192,3 +192,16 @@ def test_key_with_unexpected_characters_is_rejected() -> None:
             lambda path: path,
             otp_secret=normalize_otp_input("ABCD EFGH ÉJKL MNOP"),
         )
+
+
+def test_full_width_digits_are_not_a_one_time_code() -> None:
+    """Digits typed with a phone IME in full width are not treated as a code."""
+    full_width_123456 = "".join(chr(0xFF11 + offset) for offset in range(6))
+    assert is_one_time_code(full_width_123456) is False
+
+
+@pytest.mark.parametrize("key", ["ABCDEFGH", "234567234"])
+def test_too_short_key_is_rejected(key: str) -> None:
+    """A partial paste is reported instead of generating wrong codes."""
+    with pytest.raises(AlexaInvalidOtpSecret):
+        AlexaAuth("amazon.com", "user@example.com", lambda path: path, otp_secret=key)

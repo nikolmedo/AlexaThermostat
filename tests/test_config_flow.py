@@ -16,6 +16,7 @@ from custom_components.alexa_thermostat.api import (
     CHALLENGE_CAPTCHA,
     CHALLENGE_SECURITY_CODE,
     CHALLENGE_UNSUPPORTED,
+    AlexaAuth,
     AlexaAuthError,
     AlexaConnectionError,
     AlexaInvalidOtpSecret,
@@ -367,3 +368,15 @@ async def test_one_time_code_in_key_field(
     assert CONF_OTP_SECRET not in result["data"]
     assert "123456" not in str(result["data"])
     assert result["result"].options == {}
+
+
+@pytest.mark.parametrize("pasted", ["ABCD EFGH ÉJKL MNOP", "ABCD EFGH"])
+async def test_invalid_key_through_real_validation(
+    hass: HomeAssistant, flow_auth: MagicMock, pasted: str
+) -> None:
+    """A bad key goes through the real normalize + validation and is reported."""
+    flow_auth.side_effect = AlexaAuth
+    result = await _start(hass, {**USER_INPUT, CONF_OTP_SECRET: pasted})
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_OTP_SECRET: "invalid_otp_secret"}
