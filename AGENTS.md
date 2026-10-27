@@ -22,7 +22,9 @@ custom_components/alexa_thermostat/
     models.py          Dataclasses and enums (Temperature, ThermostatState, ...)
     exceptions.py      AlexaError hierarchy
   __init__.py          async_setup_entry / async_unload_entry
-  config_flow.py       user, security_code, captcha, reauth_confirm steps + options flow
+  config_flow.py       user (menu), alexa_media, credentials, security_code, captcha,
+                       reauth (menu), reauth_confirm steps + options flow
+  alexa_media_session.py  Reads Alexa Media Player's entry (refresh token + uuid formula)
   coordinator.py       DataUpdateCoordinator + optimistic overlay (apply_optimistic)
   climate.py           The climate entity (HA <-> Alexa mode/setpoint mapping)
   diagnostics.py       Redacted diagnostics
@@ -149,6 +151,13 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
 - **hassfest rules that bit us:** entries under `exceptions` in `translations/en.json` must be
   objects (`{"message": "..."}`), not strings. Do not add `categories` to `manifest.json`: the
   hassfest action rejects it as an unknown key (HACS only warns when it is missing).
+- **Password sign-in is fragile.** alexapy's form login breaks whenever Amazon changes its pages
+  (October 2026: the `/ax/claim` flow) and Amazon throttles retries ("Could not reach Amazon" on
+  the second try). The recommended path reuses Alexa Media Player's session: `oauth.refresh_token`
+  from its config entry plus the uuid from `alexa_media.helpers.calculate_uuid`, mirrored in
+  `alexa_media_session.async_alexa_media_uuid`. If Alexa Media Player changes that formula or its
+  entry format, update this module. A browser-proxy login (like Alexa Media Player's) is the
+  long-term fix for users without it. Debug logs show alexapy's status keys when sign-in fails.
 - **Config flow sessions** are closed on failed logins, on discovery failure (abort) and in
   `async_remove` when the user abandons the dialog.
 

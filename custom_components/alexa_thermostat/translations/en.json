@@ -13,6 +13,10 @@
         "data_description": {
           "amazon_domain": "The Amazon site you use for Alexa, for example amazon.com or amazon.co.uk.",
           "otp_secret": "Recommended. In Amazon's Two-Step Verification settings add a new authenticator app, choose \"Can't scan the barcode?\" and paste the long key shown (spaces are fine). Home Assistant will then generate the codes for you. You can also type the current 6-digit code from your authenticator app to use it just for this sign-in."
+        },
+        "menu_options": {
+          "alexa_media": "Use my Alexa Media Player sign-in (recommended)",
+          "credentials": "Sign in with email and password"
         }
       },
       "reauth_confirm": {
@@ -36,6 +40,35 @@
         "data": {
           "captcha": "Characters"
         }
+      },
+      "credentials": {
+        "title": "Sign in to Amazon",
+        "description": "Use the Amazon account your thermostat is linked to in the Alexa app. Your password is only used to sign in and is never stored.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "amazon_domain": "Amazon region",
+          "otp_secret": "2FA app key (optional)"
+        },
+        "data_description": {
+          "amazon_domain": "The Amazon site you use for Alexa, for example amazon.com or amazon.co.uk.",
+          "otp_secret": "Recommended. In Amazon's Two-Step Verification settings add a new authenticator app, choose \"Can't scan the barcode?\" and paste the long key shown (spaces are fine). Home Assistant will then generate the codes for you. You can also type the current 6-digit code from your authenticator app to use it just for this sign-in."
+        }
+      },
+      "alexa_media": {
+        "title": "Choose the Amazon account",
+        "description": "Alexa Media Player is signed in to more than one Amazon account. Pick the one your thermostat is linked to.",
+        "data": {
+          "account": "Account"
+        }
+      },
+      "reauth": {
+        "title": "Sign in again",
+        "description": "Amazon ended the session for {email}.",
+        "menu_options": {
+          "alexa_media": "Use my Alexa Media Player sign-in (recommended)",
+          "reauth_confirm": "Sign in with my password"
+        }
       }
     },
     "error": {
@@ -50,7 +83,9 @@
       "already_configured": "This Amazon account is already configured.",
       "reauth_successful": "Signed in again successfully.",
       "cannot_connect": "Signed in, but Amazon did not return your devices. Try again in a few minutes.",
-      "no_thermostats": "No thermostat was found on this Amazon account. Make sure it shows up in the Alexa app."
+      "no_thermostats": "No thermostat was found on this Amazon account. Make sure it shows up in the Alexa app.",
+      "alexa_media_not_found": "No signed-in Alexa Media Player account was found.",
+      "alexa_media_session_invalid": "Alexa Media Player's Amazon session is not valid anymore. Sign in again in Alexa Media Player, then try again."
     }
   },
   "options": {

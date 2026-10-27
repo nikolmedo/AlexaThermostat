@@ -195,6 +195,12 @@ class AlexaAuth:
         status: dict[str, Any] = self._login.status or {}
         if status.get("login_successful"):
             return
+        # The status keys tell which Amazon page alexapy ended on; they hold no
+        # credentials. Enable debug logging to see them when sign-in fails.
+        _LOGGER.debug(
+            "Amazon sign-in did not complete, alexapy status: %s",
+            {key: value for key, value in status.items() if key != "captcha_image_url"},
+        )
         if status.get("securitycode_required"):
             raise AlexaLoginChallenge(CHALLENGE_SECURITY_CODE)
         if status.get("captcha_required"):
