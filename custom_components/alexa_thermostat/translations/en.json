@@ -67,10 +67,20 @@
     }
   },
   "exceptions": {
-    "unknown_previous_mode": "The thermostat is in Eco mode and its previous mode is not known yet. Choose heat, cool or heat/cool instead.",
-    "single_setpoint_in_auto": "The thermostat is in heat/cool mode. Set the low and high temperatures instead of a single target.",
-    "command_rejected": "Alexa rejected the command ({codes}).",
-    "auth_failed": "The Amazon session expired. Sign in again from the integration page.",
-    "cannot_connect": "Could not reach Alexa: {error}"
+    "unknown_previous_mode": {
+      "message": "The thermostat is in Eco mode and its previous mode is not known yet. Choose heat, cool or heat/cool instead."
+    },
+    "single_setpoint_in_auto": {
+      "message": "The thermostat is in heat/cool mode. Set the low and high temperatures instead of a single target."
+    },
+    "command_rejected": {
+      "message": "Alexa rejected the command ({codes})."
+    },
+    "auth_failed": {
+      "message": "The Amazon session expired. Sign in again from the integration page."
+    },
+    "cannot_connect": {
+      "message": "Could not reach Alexa: {error}"
+    }
   }
 }
