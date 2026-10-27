@@ -169,3 +169,13 @@ def test_normalize_otp_input(raw: str, expected: str) -> None:
 def test_is_one_time_code(value: str, expected: bool) -> None:
     """A 6-8 digit value is a one-time code, not an authenticator key."""
     assert is_one_time_code(value) is expected
+
+
+async def test_login_forwards_security_code(alexa_login: MagicMock) -> None:
+    """The one-time code reaches alexapy, which fills Amazon's OTP field with it."""
+    alexa_login.return_value.status = {"login_successful": True}
+    await _auth(password="pw").async_login({"password": "pw", "securitycode": "123456"})
+
+    alexa_login.return_value.login.assert_awaited_once_with(
+        data={"password": "pw", "securitycode": "123456"}
+    )

@@ -338,3 +338,7 @@ async def test_one_time_code_in_key_field(
     flow_auth.return_value.async_login.assert_awaited_once_with(
         {CONF_PASSWORD: "secret", "securitycode": "123456"}
     )
+    # The single-use code must never be persisted as a long-lived secret.
+    assert CONF_OTP_SECRET not in result["data"]
+    assert "123456" not in str(result["data"])
+    assert result["result"].options == {}
