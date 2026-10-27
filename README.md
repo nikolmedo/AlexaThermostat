@@ -73,8 +73,13 @@ standard thermostat card, automations, voice assistants and history.
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=alexa_thermostat)
 
 1. Go to **Settings > Devices & services > Add integration** and pick **Alexa Thermostat**.
-2. Enter your Amazon email, password and region (for example `amazon.com` or `amazon.co.uk`).
-3. If Amazon asks for a verification code or a captcha, the next screen will ask for it.
+2. If you already use [Alexa Media Player](https://github.com/alandtse/alexa_media_player), choose
+   **Use my Alexa Media Player sign-in**. That's the most reliable option: it reuses the Amazon
+   session Alexa Media Player already has, so you don't type your password and Amazon has nothing
+   to block.
+3. Otherwise choose **Sign in with email and password** and enter your Amazon email, password and
+   region (for example `amazon.com` or `amazon.co.uk`). If Amazon asks for a verification code or a
+   captcha, the next screen will ask for it.
 
 That's it. Each thermostat on your account becomes a device with one climate entity.
 
@@ -116,6 +121,11 @@ report it back, so the integration keeps your value until Alexa catches up inste
 back to the old one.
 
 ## Troubleshooting
+
+**"Amazon rejected the email or password" or "Could not reach Amazon" with the right password.**
+Amazon blocks some automated sign-ins and its sign-in pages change often. If you use Alexa Media
+Player, pick **Use my Alexa Media Player sign-in** instead. Otherwise wait a few minutes before
+retrying (Amazon throttles repeated attempts) and add the 2FA app key.
 
 **"Amazon asked for a verification step this integration cannot show yet."**
 Amazon sometimes wants you to approve the sign-in in the Amazon app or by email. Approve it and

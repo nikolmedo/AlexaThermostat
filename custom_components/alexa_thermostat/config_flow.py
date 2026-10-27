@@ -19,6 +19,7 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -28,6 +29,11 @@ from homeassistant.helpers.selector import (
 )
 import voluptuous as vol
 
+from .alexa_media_session import (
+    AlexaMediaSession,
+    async_alexa_media_uuid,
+    find_alexa_media_sessions,
+)
 from .api import (
     CHALLENGE_CAPTCHA,
     CHALLENGE_SECURITY_CODE,
@@ -59,6 +65,8 @@ from .const import (
 from .coordinator import AlexaThermostatConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
+
+CONF_ACCOUNT = "account"
 
 # The region is used as the login and API host, so only Amazon retail domains
 # are accepted (amazon.com, amazon.de, amazon.co.uk, amazon.com.mx, ...).
@@ -111,7 +119,89 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         return OptionsFlowHandler()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Ask for the Amazon credentials."""
+        """Offer Alexa Media Player's session when there is one, else ask for credentials."""
+        if user_input is None and find_alexa_media_sessions(self.hass):
+            return self.async_show_menu(step_id="user", menu_options=["alexa_media", "credentials"])
+        return await self._async_credentials_step("user", user_input)
+
+    async def async_step_credentials(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Sign in with the Amazon email and password."""
+        return await self._async_credentials_step("credentials", user_input)
+
+    async def async_step_alexa_media(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Reuse the Amazon session Alexa Media Player already holds."""
+        sessions = {
+            session.entry_id: session
+            for session in find_alexa_media_sessions(self.hass)
+            if self.source != SOURCE_REAUTH or self._matches_reauth_account(session)
+        }
+        if user_input is not None:
+            # Honor the submitted choice first: never import a different account.
+            if (chosen := sessions.get(user_input[CONF_ACCOUNT])) is None:
+                # The account was removed or signed out while the form was open.
+                return self.async_abort(reason="alexa_media_not_found")
+            return await self._async_use_alexa_media(chosen)
+        if not sessions:
+            return self.async_abort(reason="alexa_media_not_found")
+        if len(sessions) == 1:
+            return await self._async_use_alexa_media(next(iter(sessions.values())))
+
+        options = [
+            SelectOptionDict(value=entry_id, label=f"{session.email} ({session.amazon_domain})")
+            for entry_id, session in sessions.items()
+        ]
+        return self.async_show_form(
+            step_id="alexa_media",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_ACCOUNT): SelectSelector(SelectSelectorConfig(options=options))}
+            ),
+        )
+
+    async def _async_use_alexa_media(self, session: AlexaMediaSession) -> ConfigFlowResult:
+        if not AMAZON_DOMAIN_PATTERN.fullmatch(session.amazon_domain):
+            return self._alexa_media_failed("alexa_media_session_invalid")
+        self._email = session.email
+        self._amazon_domain = session.amazon_domain
+        if self.source != SOURCE_REAUTH:
+            await self.async_set_unique_id(f"{self._amazon_domain}:{self._email.lower()}")
+            self._abort_if_unique_id_configured()
+
+        await self._async_close_auth()
+        self._auth = AlexaAuth(
+            self._amazon_domain,
+            self._email,
+            self.hass.config.path,
+            tokens=session.tokens,
+            device_uuid=await async_alexa_media_uuid(self.hass, session),
+        )
+        try:
+            await self._auth.async_resume()
+        except AlexaAuthError:
+            await self._async_close_auth()
+            return self._alexa_media_failed("alexa_media_session_invalid")
+        except AlexaConnectionError:
+            await self._async_close_auth()
+            return self._alexa_media_failed("alexa_media_cannot_connect")
+        return await self._async_finish_login()
+
+    def _alexa_media_failed(self, reason: str) -> ConfigFlowResult:
+        """Abort a new setup, or fall back to the password form during reauth."""
+        if self.source == SOURCE_REAUTH:
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=REAUTH_SCHEMA,
+                errors={"base": reason},
+                description_placeholders={"email": self._email},
+            )
+        return self.async_abort(reason=reason)
+
+    async def _async_credentials_step(
+        self, step_id: str, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             self._email = user_input[CONF_EMAIL].strip()
@@ -126,7 +216,7 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
                     return result
 
         return self.async_show_form(
-            step_id="user",
+            step_id=step_id,
             data_schema=self.add_suggested_values_to_schema(
                 USER_SCHEMA,
                 {
@@ -142,7 +232,22 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         """Start a reauth when the refresh token stops working."""
         self._email = entry_data[CONF_EMAIL]
         self._amazon_domain = entry_data[CONF_AMAZON_DOMAIN]
+        if any(
+            self._matches_reauth_account(session)
+            for session in find_alexa_media_sessions(self.hass)
+        ):
+            return self.async_show_menu(
+                step_id="reauth",
+                menu_options=["alexa_media", "reauth_confirm"],
+                description_placeholders={"email": self._email},
+            )
         return await self.async_step_reauth_confirm()
+
+    def _matches_reauth_account(self, session: AlexaMediaSession) -> bool:
+        return (
+            session.email.lower() == self._email.lower()
+            and session.amazon_domain == self._amazon_domain
+        )
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -251,10 +356,10 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected error during Amazon login")
             errors["base"] = "unknown"
         else:
-            return await self._async_finish_login(errors)
+            return await self._async_finish_login()
         return None
 
-    async def _async_finish_login(self, errors: dict[str, str]) -> ConfigFlowResult | None:
+    async def _async_finish_login(self) -> ConfigFlowResult:
         assert self._auth is not None
         try:
             devices = await AlexaThermostatClient(self._auth).async_get_thermostats()
