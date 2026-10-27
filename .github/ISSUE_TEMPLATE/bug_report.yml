@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Please never paste your password, tokens or cookies.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.10.4"
+    validations:
+      required: true
+  - type: input
+    id: region
+    attributes:
+      label: Amazon region
+      placeholder: "amazon.com"
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Settings > Devices & services > Alexa Thermostat > three dots > Download diagnostics. Secrets are redacted automatically.
+      render: json
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug logs
+      description: Enable debug logging on the integration page, reproduce the problem, then paste the relevant lines.
+      render: text
