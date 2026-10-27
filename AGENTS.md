@@ -218,8 +218,9 @@ Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`
 
 ## Getting into the default HACS catalog
 
-Requirements already met by the repository: public, `hacs.json`, `manifest.json` with `domain`,
-`documentation`, `issue_tracker`, `codeowners`, `name`, `version`; brand icon;
-MIT license; HACS action and hassfest workflows. Still needed: repository description and topics
-on GitHub, issues enabled, both workflows green, and at least one full GitHub release. Then open a
-pull request to `hacs/default` adding `nikolmedo/HACS-AlexaThermostat` to the `integration` file.
+Requirements met by the repository: public, `hacs.json`, `manifest.json` with `domain`,
+`documentation`, `issue_tracker`, `codeowners`, `name`, `version`; brand icon; MIT license;
+HACS action and hassfest workflows; description, topics and issues on GitHub; green workflows and
+full GitHub releases. Submitted as hacs/default PR #12832, which adds `nikolmedo/AlexaThermostat`
+to the `integration` file (alphabetical, case-insensitive). The repository was renamed from
+`HACS-AlexaThermostat` because HACS rejects repository names that contain "HACS".

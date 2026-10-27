@@ -5,15 +5,15 @@
     "@nikolmedo"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/nikolmedo/HACS-AlexaThermostat",
+  "documentation": "https://github.com/nikolmedo/AlexaThermostat",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/nikolmedo/HACS-AlexaThermostat/issues",
+  "issue_tracker": "https://github.com/nikolmedo/AlexaThermostat/issues",
   "loggers": [
     "alexapy"
   ],
   "requirements": [
     "alexapy==1.33.0"
   ],
-  "version": "0.2.0"
+  "version": "0.2.1"
 }
