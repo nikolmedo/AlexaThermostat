@@ -1,0 +1,37 @@
+{
+  "data": {
+    "endpoint": {
+      "features": [
+        {
+          "name": "temperatureSensor",
+          "instance": null,
+          "properties": [{"name": "temperature", "value": {"value": 71.5, "scale": "FAHRENHEIT"}}],
+          "configuration": null
+        },
+        {
+          "name": "thermostat",
+          "instance": null,
+          "properties": [
+            {"name": "thermostatMode", "thermostatModeValue": "HEAT"},
+            {"name": "targetSetpoint", "value": {"value": "73", "scale": "FAHRENHEIT"}},
+            {"name": "lowerSetpoint", "value": {"value": 68, "scale": "FAHRENHEIT"}},
+            {"name": "upperSetpoint", "value": {"value": 76, "scale": "FAHRENHEIT"}}
+          ],
+          "configuration": null
+        },
+        {
+          "name": "power",
+          "instance": null,
+          "properties": [{"name": "powerState", "powerStateValue": "ON"}],
+          "configuration": null
+        },
+        {
+          "name": "range",
+          "instance": "4",
+          "properties": [{"name": "rangeValue", "rangeValue": {"value": 42}}],
+          "configuration": {"friendlyName": {"value": {"text": "Indoor humidity"}}}
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "data": {
+    "setEndpointFeatures": {
+      "featureControlResponses": [],
+      "errors": [{"endpointId": "amzn1.alexa.endpoint.thermostat-1", "code": "BAD_REQUEST"}]
+    }
+  }
+}
