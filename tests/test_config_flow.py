@@ -421,3 +421,15 @@ async def test_hass_url_is_prefilled(
         if key.description and "suggested_value" in key.description
     }
     assert suggested == {CONF_HASS_URL: expected}
+
+
+async def test_open_sign_in_does_not_block_a_new_attempt(
+    hass: HomeAssistant, flow_auth: MagicMock
+) -> None:
+    """A sign-in left open in another dialog does not abort a second one."""
+    first = await _submit(hass)
+    second = await _submit(hass)
+
+    assert first["type"] is FlowResultType.EXTERNAL_STEP
+    assert second["type"] is FlowResultType.EXTERNAL_STEP
+    assert first["flow_id"] != second["flow_id"]

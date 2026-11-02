@@ -129,7 +129,10 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
             if not AMAZON_DOMAIN_PATTERN.fullmatch(self._amazon_domain):
                 errors[CONF_AMAZON_DOMAIN] = "invalid_domain"
             else:
-                await self.async_set_unique_id(f"{self._amazon_domain}:{self._email.lower()}")
+                # A sign-in left open in another dialog must not block a new attempt.
+                await self.async_set_unique_id(
+                    f"{self._amazon_domain}:{self._email.lower()}", raise_on_progress=False
+                )
                 self._abort_if_unique_id_configured()
                 if self._prepare_auth(user_input, errors):
                     return await self.async_step_sign_in()
