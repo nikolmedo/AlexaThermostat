@@ -5,12 +5,16 @@
     "@nikolmedo"
   ],
   "config_flow": true,
+  "dependencies": [
+    "http"
+  ],
   "documentation": "https://github.com/nikolmedo/AlexaThermostat",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/nikolmedo/AlexaThermostat/issues",
   "loggers": [
-    "alexapy"
+    "alexapy",
+    "authcaptureproxy"
   ],
   "requirements": [
     "alexapy==1.33.0"
