@@ -11,8 +11,6 @@ CONF_AMAZON_DOMAIN: Final = "amazon_domain"
 CONF_OTP_SECRET: Final = "otp_secret"
 CONF_TOKENS: Final = "tokens"
 CONF_DEVICE_UUID: Final = "device_uuid"
-CONF_SECURITY_CODE: Final = "security_code"
-CONF_CAPTCHA: Final = "captcha"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 
 DEFAULT_AMAZON_DOMAIN: Final = "amazon.com"

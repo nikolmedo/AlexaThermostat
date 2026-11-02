@@ -36,17 +36,12 @@ from .exceptions import (
     AlexaAuthError,
     AlexaConnectionError,
     AlexaInvalidOtpSecret,
-    AlexaLoginChallenge,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 ALEXAPY_FILE_PREFIX = "alexa_media."
 TOKEN_KEYS = ("access_token", "refresh_token", "mac_dms", "expires_in")
-
-CHALLENGE_SECURITY_CODE = "securitycode"
-CHALLENGE_CAPTCHA = "captcha"
-CHALLENGE_UNSUPPORTED = "unsupported"
 
 # Amazon lands on one of these once the browser sign-in is complete.
 SIGNED_IN_PATHS = ("/ap/maplanding", "/spa/index.html")
@@ -168,22 +163,6 @@ class AlexaAuth:
         headers: dict[str, str] = getattr(self._login, "_headers", None) or {}
         return headers.get("User-Agent")
 
-    async def async_login(self, data: dict[str, str] | None = None) -> None:
-        """Log in with the password (config flow) or answer a challenge.
-
-        Raises AlexaLoginChallenge when Amazon asks for a code or captcha;
-        call again with {"securitycode": ...} or {"captcha": ...}.
-        """
-        try:
-            await self._login.login(data=dict(data or {}))
-        except AlexapyPyotpInvalidKey as err:
-            raise AlexaInvalidOtpSecret(str(err)) from err
-        except AlexapyConnectionError as err:
-            raise AlexaConnectionError(str(err)) from err
-        except AlexapyLoginError as err:
-            raise AlexaAuthError(str(err)) from err
-        self._raise_for_status()
-
     async def async_create_proxy(
         self,
         base_url: str,
@@ -239,34 +218,6 @@ class AlexaAuth:
     async def async_close(self) -> None:
         """Close the alexapy session."""
         await self._login.close()
-
-    def _raise_for_status(self) -> None:
-        status: dict[str, Any] = self._login.status or {}
-        if status.get("login_successful"):
-            return
-        # The status keys tell which Amazon page alexapy ended on; they hold no
-        # credentials. Enable debug logging to see them when sign-in fails.
-        _LOGGER.debug(
-            "Amazon sign-in did not complete, alexapy status: %s",
-            {key: value for key, value in status.items() if key != "captcha_image_url"},
-        )
-        if status.get("securitycode_required"):
-            raise AlexaLoginChallenge(CHALLENGE_SECURITY_CODE)
-        if status.get("captcha_required"):
-            raise AlexaLoginChallenge(CHALLENGE_CAPTCHA, status.get("captcha_image_url"))
-        if any(
-            status.get(key)
-            for key in (
-                "claimspicker_required",
-                "authselect_required",
-                "verificationcode_required",
-                "action_required",
-                "force_get",
-            )
-        ):
-            _LOGGER.debug("Unsupported Amazon login step: %s", sorted(status))
-            raise AlexaLoginChallenge(CHALLENGE_UNSUPPORTED)
-        raise AlexaAuthError(str(status.get("login_failed") or "login_failed"))
 
 
 class AlexaSignInProxy:

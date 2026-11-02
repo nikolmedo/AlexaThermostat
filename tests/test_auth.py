@@ -12,14 +12,10 @@ import pytest
 from yarl import URL
 
 from custom_components.alexa_thermostat.api import (
-    CHALLENGE_CAPTCHA,
-    CHALLENGE_SECURITY_CODE,
-    CHALLENGE_UNSUPPORTED,
     AlexaAuth,
     AlexaAuthError,
     AlexaConnectionError,
     AlexaInvalidOtpSecret,
-    AlexaLoginChallenge,
     AlexaSignInProxy,
 )
 from custom_components.alexa_thermostat.api.auth import (
@@ -90,49 +86,17 @@ def test_invalid_otp_secret(alexa_login: MagicMock) -> None:
 
 
 @pytest.mark.parametrize(
-    ("status", "challenge"),
-    [
-        ({"securitycode_required": True}, CHALLENGE_SECURITY_CODE),
-        ({"captcha_required": True, "captcha_image_url": "https://x/c.jpg"}, CHALLENGE_CAPTCHA),
-        ({"claimspicker_required": True}, CHALLENGE_UNSUPPORTED),
-        ({"action_required": True}, CHALLENGE_UNSUPPORTED),
-    ],
-)
-async def test_login_challenges(alexa_login: MagicMock, status: dict, challenge: str) -> None:
-    """Amazon login steps become typed challenges."""
-    alexa_login.return_value.status = status
-    with pytest.raises(AlexaLoginChallenge) as err:
-        await _auth(password="pw").async_login({"password": "pw"})
-    assert err.value.challenge == challenge
-    if challenge == CHALLENGE_CAPTCHA:
-        assert err.value.captcha_url == "https://x/c.jpg"
-
-
-async def test_login_success_and_failure(alexa_login: MagicMock) -> None:
-    """login_successful passes, anything else is an auth error."""
-    auth = _auth(password="pw")
-    alexa_login.return_value.status = {"login_successful": True}
-    await auth.async_login({"password": "pw"})
-
-    alexa_login.return_value.status = {"login_failed": "login_failed"}
-    with pytest.raises(AlexaAuthError):
-        await auth.async_login({"password": "pw"})
-
-
-@pytest.mark.parametrize(
     ("error", "expected"),
     [
         (AlexapyConnectionError("down"), AlexaConnectionError),
         (AlexapyLoginError("nope"), AlexaAuthError),
     ],
 )
-async def test_login_maps_alexapy_errors(
+async def test_resume_maps_alexapy_errors(
     alexa_login: MagicMock, error: Exception, expected: type[Exception]
 ) -> None:
     """alexapy errors never leak out of the auth layer."""
     alexa_login.return_value.login.side_effect = error
-    with pytest.raises(expected):
-        await _auth(password="pw").async_login()
     with pytest.raises(expected):
         await _auth().async_resume()
 
@@ -175,16 +139,6 @@ def test_normalize_otp_input(raw: str, expected: str) -> None:
 def test_is_one_time_code(value: str, expected: bool) -> None:
     """A 6-8 digit value is a one-time code, not an authenticator key."""
     assert is_one_time_code(value) is expected
-
-
-async def test_login_forwards_security_code(alexa_login: MagicMock) -> None:
-    """The one-time code reaches alexapy, which fills Amazon's OTP field with it."""
-    alexa_login.return_value.status = {"login_successful": True}
-    await _auth(password="pw").async_login({"password": "pw", "securitycode": "123456"})
-
-    alexa_login.return_value.login.assert_awaited_once_with(
-        data={"password": "pw", "securitycode": "123456"}
-    )
 
 
 def test_key_with_unexpected_characters_is_rejected() -> None:

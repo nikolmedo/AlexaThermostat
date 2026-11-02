@@ -6,9 +6,6 @@ integration can be accepted there.
 """
 
 from .auth import (
-    CHALLENGE_CAPTCHA,
-    CHALLENGE_SECURITY_CODE,
-    CHALLENGE_UNSUPPORTED,
     AlexaAuth,
     AlexaSignInProxy,
     is_one_time_code,
@@ -22,7 +19,6 @@ from .exceptions import (
     AlexaConnectionError,
     AlexaError,
     AlexaInvalidOtpSecret,
-    AlexaLoginChallenge,
 )
 from .models import (
     Operation,
@@ -34,9 +30,6 @@ from .models import (
 )
 
 __all__ = [
-    "CHALLENGE_CAPTCHA",
-    "CHALLENGE_SECURITY_CODE",
-    "CHALLENGE_UNSUPPORTED",
     "AlexaApiError",
     "AlexaAuth",
     "AlexaAuthError",
@@ -44,7 +37,6 @@ __all__ = [
     "AlexaConnectionError",
     "AlexaError",
     "AlexaInvalidOtpSecret",
-    "AlexaLoginChallenge",
     "AlexaSignInProxy",
     "AlexaThermostatClient",
     "Operation",
