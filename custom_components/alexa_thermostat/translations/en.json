@@ -8,11 +8,13 @@
           "email": "Email",
           "password": "Password",
           "amazon_domain": "Amazon region",
-          "otp_secret": "2FA app key (optional)"
+          "otp_secret": "2FA app key (optional)",
+          "hass_url": "Home Assistant URL"
         },
         "data_description": {
           "amazon_domain": "The Amazon site you use for Alexa, for example amazon.com or amazon.co.uk.",
-          "otp_secret": "Recommended. In Amazon's Two-Step Verification settings add a new authenticator app, choose \"Can't scan the barcode?\" and paste the long key shown (spaces are fine). Home Assistant will then fill in the codes for you. Without it, type the code on Amazon's page."
+          "otp_secret": "Recommended. In Amazon's Two-Step Verification settings add a new authenticator app, choose \"Can't scan the barcode?\" and paste the long key shown (spaces are fine). Home Assistant will then fill in the codes for you. Without it, type the code on Amazon's page.",
+          "hass_url": "The address this browser uses to open Home Assistant, for example http://homeassistant.local:8123. Amazon's sign-in page opens through it."
         }
       },
       "reauth_confirm": {
@@ -20,12 +22,16 @@
         "description": "Amazon ended the session for {email}. Enter your password, then finish signing in on Amazon's page that opens in a new tab.",
         "data": {
           "password": "Password",
-          "otp_secret": "2FA app key (optional)"
+          "otp_secret": "2FA app key (optional)",
+          "hass_url": "Home Assistant URL"
+        },
+        "data_description": {
+          "hass_url": "The address this browser uses to open Home Assistant, for example http://homeassistant.local:8123. Amazon's sign-in page opens through it."
         }
       },
       "sign_in": {
         "title": "Sign in on Amazon",
-        "description": "Finish signing in on the Amazon page that opened in a new tab. It closes by itself when you are done."
+        "description": "Finish signing in on the Amazon page that opened in a new tab. It closes by itself when you are done. If no tab opened, [open Amazon's sign-in page]({url})."
       }
     },
     "error": {
@@ -33,7 +39,8 @@
       "invalid_otp_secret": "The 2FA app key is not valid. Paste the long key Amazon shows under \"Can't scan the barcode?\" (about 52 letters and digits 2-7), not an email or SMS code.",
       "cannot_connect": "Could not reach Amazon. Check your connection and try again.",
       "unknown": "Unexpected error. Check the logs for details.",
-      "sign_in_failed": "Amazon did not confirm the sign-in. Make sure you finished it on Amazon's page with the same email, then try again."
+      "sign_in_failed": "Amazon did not confirm the sign-in. Make sure you finished it on Amazon's page with the same email, then try again.",
+      "invalid_hass_url": "Enter the full address of Home Assistant, starting with http:// or https://."
     },
     "abort": {
       "already_configured": "This Amazon account is already configured.",

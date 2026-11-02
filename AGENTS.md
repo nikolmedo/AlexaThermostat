@@ -173,8 +173,11 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
   fields (the Amazon password) and session cookies, and "Enable debug logging" plus a public
   issue would leak them.
 - **The proxy is built on the first browser request**, from that request's origin, because
-  authcaptureproxy rewrites Amazon's links with the base URL it was built with. The external step
-  URL is relative, so no Home Assistant URL setting is needed.
+  authcaptureproxy rewrites Amazon's links with the base URL it was built with.
+- **The external step URL must be absolute.** The frontend opens it with `window.open` only after
+  `sanitizeHttpUrl` (`new URL(url)`, http/https only), so a relative path silently opens nothing.
+  The form asks for the Home Assistant URL (prefilled from `get_url`, origin only), and the
+  `sign_in` description repeats the URL as a link in case the browser blocks the pop-up.
 - **The 2FA code is refreshed on every proxied request** (`AlexaSignInProxy.async_handle`);
   alexapy's own proxy computes it once, and codes expire every 30 seconds.
 - **Amazon shows the device as "Alexa Media Player".** alexapy hardcodes that name in its

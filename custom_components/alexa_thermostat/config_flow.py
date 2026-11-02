@@ -15,6 +15,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -27,6 +28,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 import voluptuous as vol
+from yarl import URL
 
 from .api import (
     AlexaAuth,
@@ -42,6 +44,7 @@ from .const import (
     AMAZON_DOMAINS,
     CONF_AMAZON_DOMAIN,
     CONF_DEVICE_UUID,
+    CONF_HASS_URL,
     CONF_OTP_SECRET,
     CONF_SCAN_INTERVAL,
     CONF_TOKENS,
@@ -61,6 +64,9 @@ _LOGGER = logging.getLogger(__name__)
 AMAZON_DOMAIN_PATTERN = re.compile(r"amazon\.(?:[a-z]{2,3}|co\.[a-z]{2}|com\.[a-z]{2})")
 
 PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+HASS_URL_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.URL))
+# Used when Home Assistant has no URL configured (Settings > System > Network).
+FALLBACK_HASS_URL = "http://homeassistant.local:8123"
 
 USER_SCHEMA = vol.Schema(
     {
@@ -74,6 +80,7 @@ USER_SCHEMA = vol.Schema(
             )
         ),
         vol.Optional(CONF_OTP_SECRET): PASSWORD_SELECTOR,
+        vol.Required(CONF_HASS_URL): HASS_URL_SELECTOR,
     }
 )
 
@@ -81,8 +88,17 @@ REAUTH_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR,
         vol.Optional(CONF_OTP_SECRET): PASSWORD_SELECTOR,
+        vol.Required(CONF_HASS_URL): HASS_URL_SELECTOR,
     }
 )
+
+
+def normalize_hass_url(value: str) -> str | None:
+    """Return the origin of an http(s) URL, or None when it is not one."""
+    url = URL(value.strip())
+    if url.scheme not in ("http", "https") or not url.host:
+        return None
+    return str(url.origin())
 
 
 class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -95,6 +111,7 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         self._auth: AlexaAuth | None = None
         self._email: str = ""
         self._amazon_domain: str = DEFAULT_AMAZON_DOMAIN
+        self._hass_url: str | None = None
         self._sign_in_started = False
 
     @staticmethod
@@ -127,13 +144,25 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=self.add_suggested_values_to_schema(
                 USER_SCHEMA,
                 {
-                    key: value
-                    for key, value in (user_input or {}).items()
-                    if key not in (CONF_PASSWORD, CONF_OTP_SECRET)
+                    CONF_HASS_URL: self._suggested_hass_url(),
+                    **{
+                        key: value
+                        for key, value in (user_input or {}).items()
+                        if key not in (CONF_PASSWORD, CONF_OTP_SECRET)
+                    },
                 },
             ),
             errors=errors,
         )
+
+    def _suggested_hass_url(self) -> str:
+        """Prefill the address the browser opens Home Assistant with."""
+        if self._hass_url:
+            return self._hass_url
+        try:
+            return get_url(self.hass)
+        except NoURLAvailableError:
+            return FALLBACK_HASS_URL
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         """Start a reauth when the refresh token stops working."""
@@ -153,13 +182,19 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
     def _show_reauth_form(self, errors: dict[str, str]) -> ConfigFlowResult:
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=REAUTH_SCHEMA,
+            data_schema=self.add_suggested_values_to_schema(
+                REAUTH_SCHEMA, {CONF_HASS_URL: self._suggested_hass_url()}
+            ),
             errors=errors,
             description_placeholders={"email": self._email},
         )
 
     def _prepare_auth(self, user_input: Mapping[str, Any], errors: dict[str, str]) -> bool:
         """Create the alexapy login for this attempt; False when the input is invalid."""
+        if (hass_url := normalize_hass_url(user_input[CONF_HASS_URL])) is None:
+            errors[CONF_HASS_URL] = "invalid_hass_url"
+            return False
+        self._hass_url = hass_url
         otp_input = normalize_otp_input(user_input.get(CONF_OTP_SECRET))
         if is_one_time_code(otp_input):
             # A current 6-digit code cannot generate the next ones. Amazon's page
@@ -189,8 +224,11 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         assert self._auth is not None
         if not self._sign_in_started:
             self._sign_in_started = True
-            url = async_start_sign_in(self.hass, self.flow_id, self._auth)
-            return self.async_external_step(step_id="sign_in", url=url)
+            # The frontend only opens absolute http(s) URLs.
+            url = f"{self._hass_url}{async_start_sign_in(self.hass, self.flow_id, self._auth)}"
+            return self.async_external_step(
+                step_id="sign_in", url=url, description_placeholders={"url": url}
+            )
         # The callback view resumes the flow once Amazon confirmed the sign-in.
         return self.async_external_step_done(next_step_id="finish")
 

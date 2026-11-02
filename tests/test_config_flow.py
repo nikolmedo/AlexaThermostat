@@ -9,6 +9,7 @@ from homeassistant.config_entries import SOURCE_USER
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.network import NoURLAvailableError
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -22,6 +23,7 @@ from custom_components.alexa_thermostat.api.parser import parse_thermostats
 from custom_components.alexa_thermostat.const import (
     CONF_AMAZON_DOMAIN,
     CONF_DEVICE_UUID,
+    CONF_HASS_URL,
     CONF_OTP_SECRET,
     CONF_SCAN_INTERVAL,
     CONF_TOKENS,
@@ -31,10 +33,12 @@ from custom_components.alexa_thermostat.proxy_view import DATA_SIGN_INS
 
 from .conftest import EMAIL, TOKENS, load_fixture
 
+HASS_URL = "http://ha.local:8123"
 USER_INPUT = {
     CONF_EMAIL: EMAIL,
     CONF_PASSWORD: "secret",
     CONF_AMAZON_DOMAIN: "amazon.com",
+    CONF_HASS_URL: HASS_URL,
 }
 NEW_UUID = "fedcba9876543210fedcba9876543210"
 
@@ -102,7 +106,10 @@ async def test_user_flow_opens_amazon_through_the_proxy(
 
     assert result["type"] is FlowResultType.EXTERNAL_STEP
     assert result["step_id"] == "sign_in"
-    assert result["url"] == f"/auth/{DOMAIN}/proxy/{result['flow_id']}"
+    # The frontend only opens absolute http(s) URLs.
+    url = f"{HASS_URL}/auth/{DOMAIN}/proxy/{result['flow_id']}"
+    assert result["url"] == url
+    assert result["description_placeholders"] == {"url": url}
     assert hass.data[DATA_SIGN_INS][result["flow_id"]].auth is flow_auth.return_value
     assert flow_auth.call_args.kwargs["password"] == "secret"
     assert flow_auth.call_args.kwargs["otp_secret"] == "ABCDEFGH"
@@ -157,7 +164,11 @@ async def test_sign_in_errors_then_recovers(
         for key in result["data_schema"].schema
         if key.description and "suggested_value" in key.description
     }
-    assert suggested == {CONF_EMAIL: EMAIL, CONF_AMAZON_DOMAIN: "amazon.com"}
+    assert suggested == {
+        CONF_EMAIL: EMAIL,
+        CONF_AMAZON_DOMAIN: "amazon.com",
+        CONF_HASS_URL: HASS_URL,
+    }
     flow_auth.return_value.async_close.assert_awaited_once()
     assert hass.data[DATA_SIGN_INS] == {}
 
@@ -300,7 +311,7 @@ async def test_reauth_keeps_device_uuid(
     result = await mock_config_entry.start_reauth_flow(hass)
     assert result["step_id"] == "reauth_confirm"
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_PASSWORD: "new-secret"}
+        result["flow_id"], {CONF_PASSWORD: "new-secret", CONF_HASS_URL: HASS_URL}
     )
     result = await _browser_signs_in(hass, result)
 
@@ -320,7 +331,7 @@ async def test_reauth_failure_shows_reauth_form(
 
     result = await mock_config_entry.start_reauth_flow(hass)
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_PASSWORD: "new-secret"}
+        result["flow_id"], {CONF_PASSWORD: "new-secret", CONF_HASS_URL: HASS_URL}
     )
     result = await _browser_signs_in(hass, result)
 
@@ -362,3 +373,51 @@ async def test_alexa_media_player_entries_are_never_read(
     result = await mock_config_entry.start_reauth_flow(hass)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
+
+
+@pytest.mark.parametrize("hass_url", ["homeassistant.local:8123", "ftp://ha.local", "/auth"])
+async def test_invalid_hass_url_is_rejected(
+    hass: HomeAssistant, flow_auth: MagicMock, hass_url: str
+) -> None:
+    """The browser needs a full http(s) address to open Amazon's page."""
+    result = await _submit(hass, {**USER_INPUT, CONF_HASS_URL: hass_url})
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_HASS_URL: "invalid_hass_url"}
+    flow_auth.assert_not_called()
+
+
+async def test_hass_url_keeps_only_the_origin(hass: HomeAssistant, flow_auth: MagicMock) -> None:
+    """A pasted dashboard address still opens the proxy at the root of Home Assistant."""
+    result = await _submit(
+        hass, {**USER_INPUT, CONF_HASS_URL: " https://ha.example.com/lovelace/0 "}
+    )
+
+    assert result["url"] == f"https://ha.example.com/auth/{DOMAIN}/proxy/{result['flow_id']}"
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        ("http://192.168.1.5:8123", "http://192.168.1.5:8123"),
+        (None, "http://homeassistant.local:8123"),
+    ],
+)
+async def test_hass_url_is_prefilled(
+    hass: HomeAssistant, configured: str | None, expected: str
+) -> None:
+    """The field starts with Home Assistant's own URL, or the usual local address."""
+    side_effect = NoURLAvailableError if configured is None else None
+    with patch(
+        "custom_components.alexa_thermostat.config_flow.get_url",
+        return_value=configured,
+        side_effect=side_effect,
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+
+    suggested = {
+        str(key): key.description["suggested_value"]
+        for key in result["data_schema"].schema
+        if key.description and "suggested_value" in key.description
+    }
+    assert suggested == {CONF_HASS_URL: expected}

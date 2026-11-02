@@ -74,10 +74,12 @@ standard thermostat card, automations, voice assistants and history.
 
 1. Go to **Settings > Devices & services > Add integration** and pick **Alexa Thermostat**.
 2. Enter your Amazon email, password and region (for example `amazon.com` or `amazon.co.uk`).
-   Adding the 2FA app key (see below) is strongly recommended.
+   Adding the 2FA app key (see below) is strongly recommended. Check the **Home Assistant URL**:
+   it must be the address this browser uses to open Home Assistant (it is prefilled from
+   **Settings > System > Network**).
 3. Amazon's sign-in page opens in a new browser tab with your details filled in. Finish signing in
    there, including any robot check, captcha or code Amazon asks for. The tab closes by itself
-   when you are done.
+   when you are done. If no tab opens, click the link in the setup dialog.
 
 That's it. Each thermostat on your account becomes a device with one climate entity.
 
