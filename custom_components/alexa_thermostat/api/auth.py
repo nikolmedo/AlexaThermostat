@@ -4,25 +4,32 @@ Amazon changes its login pages often. Everything that touches alexapy lives
 in this module so a broken login can be fixed (or the library swapped) without
 touching the GraphQL client or Home Assistant code.
 
-Only the OAuth refresh token and the device uuid are persisted. The password
-is used once during the config flow and never stored.
+Sign-in goes through a browser proxy: the user signs in on Amazon's own pages,
+served through Home Assistant, so Amazon's robot checks, captchas and 2FA
+prompts are solved by a person. Only the OAuth refresh token and the device
+uuid are persisted. The password is used once to fill in the form and never
+stored.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
+from functools import partial
 import logging
 import re
 from typing import Any
 import unicodedata
 
-from aiohttp import ClientSession
+from aiohttp import ClientError, ClientSession, web
 from alexapy import AlexaLogin
+from alexapy.alexaproxy import AlexaProxy
 from alexapy.errors import (
     AlexapyConnectionError,
     AlexapyLoginError,
     AlexapyPyotpInvalidKey,
 )
+import httpx
 from yarl import URL
 
 from .exceptions import (
@@ -40,6 +47,9 @@ TOKEN_KEYS = ("access_token", "refresh_token", "mac_dms", "expires_in")
 CHALLENGE_SECURITY_CODE = "securitycode"
 CHALLENGE_CAPTCHA = "captcha"
 CHALLENGE_UNSUPPORTED = "unsupported"
+
+# Amazon lands on one of these once the browser sign-in is complete.
+SIGNED_IN_PATHS = ("/ap/maplanding", "/spa/index.html")
 
 ONE_TIME_CODE = re.compile(r"\d{6,8}", re.ASCII)
 # Amazon's authenticator keys are 52 characters; anything under 16 is a partial paste.
@@ -174,6 +184,45 @@ class AlexaAuth:
             raise AlexaAuthError(str(err)) from err
         self._raise_for_status()
 
+    async def async_create_proxy(
+        self,
+        base_url: str,
+        *,
+        start_url: str,
+        return_url: str,
+        session_factory: Callable[[], httpx.AsyncClient],
+    ) -> AlexaSignInProxy:
+        """Create the proxy that serves Amazon's sign-in pages under base_url.
+
+        start_url is where the browser enters the proxy and return_url is where
+        it is sent once Amazon confirms the sign-in.
+        """
+        # The proxy builds a default httpx client, which loads SSL certificates:
+        # keep that blocking work off the event loop.
+        proxy = await asyncio.get_running_loop().run_in_executor(
+            None, AlexaProxy, self._login, base_url
+        )
+        default_session = proxy.session
+        proxy.session_factory = session_factory
+        proxy.session = session_factory()
+        await default_session.aclose()
+        # alexapy sends the browser back here when Amazon drops it on its home page.
+        self._login.proxy_url = URL(start_url)
+        return AlexaSignInProxy(proxy, self._login, URL(return_url))
+
+    async def async_finish_proxy_login(self) -> None:
+        """Exchange what the proxy captured for tokens and confirm the account."""
+        try:
+            signed_in = await self._login.test_loggedin()
+        except AlexapyConnectionError as err:
+            raise AlexaConnectionError(str(err)) from err
+        except AlexapyLoginError as err:
+            raise AlexaAuthError(str(err)) from err
+        except ClientError as err:
+            raise AlexaConnectionError(str(err)) from err
+        if not signed_in:
+            raise AlexaAuthError("Amazon did not confirm the sign-in")
+
     async def async_resume(self) -> None:
         """Restore the session from the stored refresh token."""
         if not self._login.refresh_token:
@@ -218,3 +267,47 @@ class AlexaAuth:
             _LOGGER.debug("Unsupported Amazon login step: %s", sorted(status))
             raise AlexaLoginChallenge(CHALLENGE_UNSUPPORTED)
         raise AlexaAuthError(str(status.get("login_failed") or "login_failed"))
+
+
+class AlexaSignInProxy:
+    """Serve Amazon's sign-in pages to the browser and notice when it is done."""
+
+    def __init__(self, proxy: AlexaProxy, login: AlexaLogin, return_url: URL) -> None:
+        """Wrap alexapy's proxy so success always returns to our own callback."""
+        self._proxy = proxy
+        self._login = login
+        self._return_url = return_url
+        self.signed_in = False
+        self._amazon_test = proxy.test_amazon_url
+        proxy.tests = {"test_amazon_url": self.async_check_response}
+
+    async def async_check_response(
+        self, resp: Any, data: dict[str, Any], query: dict[str, Any]
+    ) -> URL | str | None:
+        """Run after every Amazon response; a URL result redirects the browser."""
+        result = await self._amazon_test(resp, data, query)
+        if URL(str(resp.url)).path in SIGNED_IN_PATHS:
+            # alexapy captured the authorization code. Ignore its own result:
+            # it would redirect to a callback_url taken from the query string.
+            self.signed_in = True
+            return self._return_url
+        return result
+
+    async def async_handle(self, request: web.Request) -> web.StreamResponse:
+        """Proxy one browser request to Amazon."""
+        # 2FA codes expire every 30 seconds, so fill in a fresh one each time.
+        self._proxy.modifiers = {
+            "autofill": partial(
+                self._proxy.autofill,
+                {
+                    "email": self._login.email,
+                    "password": self._login.password,
+                    "otpCode": self._login.get_totp_token(),
+                },
+            )
+        }
+        return await self._proxy.all_handler(request)
+
+    async def async_close(self) -> None:
+        """Close the proxy's connection to Amazon."""
+        await self._proxy.session.aclose()

@@ -5,8 +5,11 @@ from __future__ import annotations
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from aiohttp import ClientError
 from alexapy.errors import AlexapyConnectionError, AlexapyLoginError, AlexapyPyotpInvalidKey
+import httpx
 import pytest
+from yarl import URL
 
 from custom_components.alexa_thermostat.api import (
     CHALLENGE_CAPTCHA,
@@ -17,6 +20,7 @@ from custom_components.alexa_thermostat.api import (
     AlexaConnectionError,
     AlexaInvalidOtpSecret,
     AlexaLoginChallenge,
+    AlexaSignInProxy,
 )
 from custom_components.alexa_thermostat.api.auth import (
     is_one_time_code,
@@ -205,3 +209,126 @@ def test_too_short_key_is_rejected(key: str) -> None:
     """A partial paste is reported instead of generating wrong codes."""
     with pytest.raises(AlexaInvalidOtpSecret):
         AlexaAuth("amazon.com", "user@example.com", lambda path: path, otp_secret=key)
+
+
+PROXY_BASE = "http://ha.local:8123/auth/alexa_thermostat/proxy/abc"
+PROXY_START = "/auth/alexa_thermostat/proxy/abc?config_flow_id=abc"
+PROXY_RETURN = "/auth/alexa_thermostat/callback?flow_id=abc"
+
+
+@pytest.fixture
+def proxy_login(alexa_login: MagicMock) -> MagicMock:
+    """Give the patched login what alexapy's proxy reads from it."""
+    login = alexa_login.return_value
+    login.start_url = URL("https://www.amazon.com/ap/signin")
+    login.email = "user@example.com"
+    login.password = "pw"
+    login.get_totp_token = MagicMock(return_value="123456")
+    login.session = MagicMock()
+    login._debug = False
+    return login
+
+
+async def _proxy(clients: list[httpx.AsyncClient]) -> AlexaSignInProxy:
+    def factory() -> httpx.AsyncClient:
+        clients.append(httpx.AsyncClient())
+        return clients[-1]
+
+    return await _auth(password="pw").async_create_proxy(
+        PROXY_BASE, start_url=PROXY_START, return_url=PROXY_RETURN, session_factory=factory
+    )
+
+
+def _response(url: str) -> MagicMock:
+    return MagicMock(url=url)
+
+
+async def test_proxy_success_redirects_to_our_callback(proxy_login: MagicMock) -> None:
+    """Amazon's landing page ends the proxy with a redirect to our own callback only."""
+    clients: list[httpx.AsyncClient] = []
+    proxy = await _proxy(clients)
+    try:
+        assert proxy_login.proxy_url == URL(PROXY_START)
+        # A callback_url smuggled into the start query must never be followed.
+        proxy._proxy.init_query = {"callback_url": "https://evil.example/steal"}
+
+        result = await proxy.async_check_response(
+            _response("https://www.amazon.com/ap/maplanding?openid.oa2.authorization_code=CODE"),
+            {},
+            {},
+        )
+
+        assert result == URL(PROXY_RETURN)
+        assert proxy_login.authorization_code == "CODE"
+        assert proxy.signed_in
+    finally:
+        for client in clients:
+            await client.aclose()
+
+
+async def test_proxy_other_pages_keep_going(proxy_login: MagicMock) -> None:
+    """Sign-in pages pass through; a bare "/" goes back to the start of the proxy."""
+    clients: list[httpx.AsyncClient] = []
+    proxy = await _proxy(clients)
+    try:
+        signin = await proxy.async_check_response(
+            _response("https://www.amazon.com/ap/signin"), {}, {}
+        )
+        home = await proxy.async_check_response(_response("https://www.amazon.com/"), {}, {})
+
+        assert signin is None
+        assert home == URL(PROXY_START)
+        assert not proxy.signed_in
+    finally:
+        for client in clients:
+            await client.aclose()
+
+
+async def test_proxy_handle_refreshes_the_2fa_code(proxy_login: MagicMock) -> None:
+    """Each browser request gets a fresh code, since codes expire every 30 seconds."""
+    clients: list[httpx.AsyncClient] = []
+    proxy = await _proxy(clients)
+    try:
+        proxy._proxy.all_handler = AsyncMock(return_value="page")
+        proxy_login.get_totp_token.reset_mock()
+        request = MagicMock()
+
+        assert await proxy.async_handle(request) == "page"
+
+        proxy._proxy.all_handler.assert_awaited_once_with(request)
+        proxy_login.get_totp_token.assert_called_once()
+        await proxy.async_close()
+        assert clients[-1].is_closed
+    finally:
+        for client in clients:
+            await client.aclose()
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected"),
+    [
+        (False, AlexaAuthError),
+        (AlexapyLoginError("nope"), AlexaAuthError),
+        (AlexapyConnectionError("down"), AlexaConnectionError),
+        (ClientError("down"), AlexaConnectionError),
+    ],
+)
+async def test_finish_proxy_login_errors(
+    alexa_login: MagicMock, outcome: object, expected: type[Exception]
+) -> None:
+    """Amazon not confirming the sign-in never passes silently."""
+    login = alexa_login.return_value
+    if isinstance(outcome, Exception):
+        login.test_loggedin = AsyncMock(side_effect=outcome)
+    else:
+        login.test_loggedin = AsyncMock(return_value=outcome)
+    with pytest.raises(expected):
+        await _auth().async_finish_proxy_login()
+
+
+async def test_finish_proxy_login_success(alexa_login: MagicMock) -> None:
+    """A confirmed sign-in exchanges the captured code for tokens."""
+    login = alexa_login.return_value
+    login.test_loggedin = AsyncMock(return_value=True)
+    await _auth().async_finish_proxy_login()
+    login.test_loggedin.assert_awaited_once_with()

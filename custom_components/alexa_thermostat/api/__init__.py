@@ -10,6 +10,7 @@ from .auth import (
     CHALLENGE_SECURITY_CODE,
     CHALLENGE_UNSUPPORTED,
     AlexaAuth,
+    AlexaSignInProxy,
     is_one_time_code,
     normalize_otp_input,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "AlexaError",
     "AlexaInvalidOtpSecret",
     "AlexaLoginChallenge",
+    "AlexaSignInProxy",
     "AlexaThermostatClient",
     "Operation",
     "Temperature",
