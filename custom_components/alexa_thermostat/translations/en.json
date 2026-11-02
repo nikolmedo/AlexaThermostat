@@ -14,7 +14,7 @@
         "data_description": {
           "amazon_domain": "The Amazon site you use for Alexa, for example amazon.com or amazon.co.uk.",
           "otp_secret": "Recommended. In Amazon's Two-Step Verification settings add a new authenticator app, choose \"Can't scan the barcode?\" and paste the long key shown (spaces are fine). Home Assistant will then fill in the codes for you. Without it, type the code on Amazon's page.",
-          "hass_url": "The address this browser uses to open Home Assistant, for example http://homeassistant.local:8123. Amazon's sign-in page opens through it."
+          "hass_url": "The address this browser uses to open Home Assistant, as shown in the address bar. Amazon's sign-in page opens through it."
         }
       },
       "reauth_confirm": {
@@ -26,7 +26,7 @@
           "hass_url": "Home Assistant URL"
         },
         "data_description": {
-          "hass_url": "The address this browser uses to open Home Assistant, for example http://homeassistant.local:8123. Amazon's sign-in page opens through it."
+          "hass_url": "The address this browser uses to open Home Assistant, as shown in the address bar. Amazon's sign-in page opens through it."
         }
       },
       "sign_in": {
@@ -40,7 +40,7 @@
       "cannot_connect": "Could not reach Amazon. Check your connection and try again.",
       "unknown": "Unexpected error. Check the logs for details.",
       "sign_in_failed": "Amazon did not confirm the sign-in. Make sure you finished it on Amazon's page with the same email, then try again.",
-      "invalid_hass_url": "Enter the full address of Home Assistant, starting with http:// or https://."
+      "invalid_hass_url": "Enter the full address of Home Assistant, including http or https at the start."
     },
     "abort": {
       "already_configured": "This Amazon account is already configured.",

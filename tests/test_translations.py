@@ -27,3 +27,16 @@ def test_every_translation_key_used_in_code_exists() -> None:
     }
     assert used
     assert used <= set(EN["exceptions"])
+
+
+def test_strings_contain_no_urls() -> None:
+    """hassfest rejects URLs in translation strings; use description placeholders."""
+
+    def strings(node: object):
+        if isinstance(node, dict):
+            for value in node.values():
+                yield from strings(value)
+        elif isinstance(node, str):
+            yield node
+
+    assert not [text for text in strings(EN) if re.search(r"https?://", text)]
