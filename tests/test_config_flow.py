@@ -380,3 +380,22 @@ async def test_invalid_key_through_real_validation(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {CONF_OTP_SECRET: "invalid_otp_secret"}
+
+
+async def test_alexa_media_player_entries_are_never_read(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """Another integration's signed-in entry never changes the sign-in or reauth steps."""
+    MockConfigEntry(
+        domain="alexa_media",
+        data={CONF_EMAIL: EMAIL, "url": "amazon.com", "oauth": {"refresh_token": "Atnr|amp"}},
+    ).add_to_hass(hass)
+    mock_config_entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"
+
+    result = await mock_config_entry.start_reauth_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
