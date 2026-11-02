@@ -160,7 +160,8 @@ logs and the diagnostics file.
   next poll.
 - The thermostat does not report whether it is currently heating or cooling, so there is no
   `hvac_action`.
-- Captcha and app-approval sign-in steps are only partly supported (see Troubleshooting).
+- Signing in needs a browser that can reach your Home Assistant, because Amazon's pages are
+  passed through it.
 
 ## Contributing
 

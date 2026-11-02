@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +16,7 @@ from homeassistant.setup import async_setup_component
 import httpx
 import pytest
 
+from custom_components.alexa_thermostat.api import AlexaAuth
 from custom_components.alexa_thermostat.const import DOMAIN
 from custom_components.alexa_thermostat.proxy_view import (
     CALLBACK_PATH,
@@ -178,3 +182,83 @@ async def test_success_redirect_reaches_the_browser(
 
     assert response.status == 302
     assert response.headers["Location"] == f"{CALLBACK_PATH}?flow_id={FLOW_ID}"
+
+
+async def test_callback_resumes_the_flow_once(
+    hass: HomeAssistant, auth: MagicMock, proxy: MagicMock, flows: SimpleNamespace, client
+) -> None:
+    """Reloading the callback tab does not run the next step again."""
+    url = async_start_sign_in(hass, FLOW_ID, auth)
+    await client.get(url)
+    proxy.signed_in = True
+    callback_url = f"{CALLBACK_PATH}?flow_id={FLOW_ID}"
+
+    assert (await client.get(callback_url)).status == 200
+    assert (await client.get(callback_url)).status == 404
+    flows.configure.assert_awaited_once()
+
+
+async def test_stop_while_the_proxy_is_built(
+    hass: HomeAssistant, proxy: MagicMock, flows: SimpleNamespace, client
+) -> None:
+    """A sign-in stopped while its proxy is being built closes it and serves nothing."""
+    gate = asyncio.Event()
+
+    async def slow_create(*args, **kwargs) -> MagicMock:
+        await gate.wait()
+        return proxy
+
+    auth = MagicMock()
+    auth.async_create_proxy = slow_create
+    url = async_start_sign_in(hass, FLOW_ID, auth)
+    request = asyncio.ensure_future(client.get(url))
+    await asyncio.sleep(0.05)
+    await async_stop_sign_in(hass, FLOW_ID)
+    gate.set()
+
+    assert (await request).status == 404
+    proxy.async_close.assert_awaited_once()
+    proxy.async_handle.assert_not_awaited()
+
+
+SIGN_IN_PAGE = (
+    "<html><body><form name='signIn' method='post' action='/ap/signin'>"
+    "<input name='email'><input name='password' type='password'></form></body></html>"
+)
+
+
+async def test_spoofed_host_never_leaves_amazon(
+    hass: HomeAssistant, flows: SimpleNamespace, client
+) -> None:
+    """A Host header with another port must not make the real proxy fetch that server."""
+    fetched: list[httpx.URL] = []
+
+    def amazon(request: httpx.Request) -> httpx.Response:
+        fetched.append(request.url)
+        return httpx.Response(200, text=SIGN_IN_PAGE, headers={"content-type": "text/html"})
+
+    def factory(hass: HomeAssistant, **kwargs) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=httpx.MockTransport(amazon))
+
+    auth = AlexaAuth("amazon.com", "user@example.com", hass.config.path, password="pw")
+    navigate = {"Sec-Fetch-Mode": "navigate"}
+    with patch("custom_components.alexa_thermostat.proxy_view.create_async_httpx_client", factory):
+        url = async_start_sign_in(hass, FLOW_ID, auth)
+        assert (await client.get(url, headers=navigate)).status == 200
+        spoofed = await client.get(f"{url}/x", headers={**navigate, "Host": "169.254.169.254:80"})
+        await async_stop_sign_in(hass, FLOW_ID)
+    await auth.async_close()
+
+    assert spoofed.status == 404
+    assert fetched
+    assert all(str(url.host).endswith("amazon.com") for url in fetched), fetched
+
+
+def test_debug_logging_never_enables_authcaptureproxy() -> None:
+    """authcaptureproxy logs the posted password at debug level."""
+    manifest = json.loads(
+        (Path(__file__).parent.parent / "custom_components" / DOMAIN / "manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "authcaptureproxy" not in manifest["loggers"]

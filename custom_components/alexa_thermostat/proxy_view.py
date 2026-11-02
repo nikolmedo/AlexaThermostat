@@ -48,6 +48,9 @@ class PendingSignIn:
 
     auth: AlexaAuth
     proxy: AlexaSignInProxy | None = None
+    # The browser's origin, pinned on the first request (see _handle).
+    origin: str | None = None
+    resumed: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -102,13 +105,15 @@ class AlexaSignInProxyView(HomeAssistantView):
     ) -> web.StreamResponse:
         hass: HomeAssistant = request.app[KEY_HASS]
         pending = _pending_sign_in(hass, flow_id)
+        origin = str(request.url.origin())
         try:
             async with pending.lock:
                 if pending.proxy is None:
                     # Build the proxy on the first request: links in Amazon's pages
                     # are rewritten to the address this browser reached us on.
+                    pending.origin = origin
                     pending.proxy = await pending.auth.async_create_proxy(
-                        f"{request.url.origin()}{start_url(flow_id)}",
+                        f"{origin}{start_url(flow_id)}",
                         start_url=start_url(flow_id),
                         return_url=f"{CALLBACK_PATH}?flow_id={flow_id}",
                         session_factory=partial(
@@ -119,6 +124,14 @@ class AlexaSignInProxyView(HomeAssistantView):
                             timeout=PROXY_TIMEOUT,
                         ),
                     )
+            if hass.data[DATA_SIGN_INS].get(flow_id) is not pending:
+                # The sign-in was stopped while this request built the proxy.
+                await pending.proxy.async_close()
+                raise web.HTTPNotFound
+            if origin != pending.origin:
+                # The proxy forwards any URL it cannot map to Amazon as is, so a
+                # spoofed Host header would make it fetch another server.
+                raise web.HTTPNotFound
             return await pending.proxy.async_handle(request)
         except web.HTTPException:
             # Includes the redirect to the callback once Amazon confirms the sign-in.
@@ -144,7 +157,9 @@ class AlexaSignInCallbackView(HomeAssistantView):
         hass: HomeAssistant = request.app[KEY_HASS]
         flow_id = request.query.get("flow_id")
         pending = _pending_sign_in(hass, flow_id)
-        if pending.proxy is None or not pending.proxy.signed_in:
+        if pending.resumed or pending.proxy is None or not pending.proxy.signed_in:
             raise web.HTTPNotFound
+        # Resume once; a reloaded callback tab must not run the next step again.
+        pending.resumed = True
         await hass.config_entries.flow.async_configure(flow_id=flow_id, user_input=None)
         return web.Response(text=CALLBACK_PAGE, content_type="text/html")

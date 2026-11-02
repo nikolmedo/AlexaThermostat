@@ -13,8 +13,7 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/nikolmedo/AlexaThermostat/issues",
   "loggers": [
-    "alexapy",
-    "authcaptureproxy"
+    "alexapy"
   ],
   "requirements": [
     "alexapy==1.33.0"

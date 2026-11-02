@@ -237,10 +237,15 @@ class AlexaSignInProxy:
     ) -> URL | str | None:
         """Run after every Amazon response; a URL result redirects the browser."""
         result = await self._amazon_test(resp, data, query)
-        if URL(str(resp.url)).path in SIGNED_IN_PATHS:
-            # alexapy captured the authorization code. Ignore its own result:
-            # it would redirect to a callback_url taken from the query string.
-            self.signed_in = True
+        landing = URL(str(resp.url))
+        if landing.path in SIGNED_IN_PATHS:
+            # Ignore alexapy's own result: it would redirect to a callback_url
+            # taken from the query string. Only a landing that carries Amazon's
+            # code or token counts as signed in; the callback refuses the rest.
+            self.signed_in = bool(
+                landing.query.get("openid.oa2.authorization_code")
+                or landing.query.get("openid.oa2.access_token")
+            )
             return self._return_url
         return result
 

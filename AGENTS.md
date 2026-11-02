@@ -163,7 +163,15 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
   answer for flow ids registered by `async_start_sign_in` that are still in-progress flows of this
   domain, and the callback only resumes a flow after Amazon confirmed the sign-in. Success always
   redirects to our own callback; `AlexaSignInProxy` ignores the `callback_url` query parameter
-  alexapy would follow. Views are registered once per run (routes cannot be removed).
+  alexapy would follow, and only a landing with Amazon's code counts as signed in. The callback
+  resumes a flow once. Views are registered once per run (routes cannot be removed).
+- **The proxy pins the browser's origin.** authcaptureproxy forwards any URL it cannot map to
+  Amazon as is, so a request whose Host header differs from the first one (for example another
+  port) would make Home Assistant fetch that server. `_handle` answers 404 instead. A request that
+  built the proxy while the sign-in was stopped closes it and answers 404.
+- **Never add `authcaptureproxy` to the manifest `loggers`.** At debug level it logs posted form
+  fields (the Amazon password) and session cookies, and "Enable debug logging" plus a public
+  issue would leak them.
 - **The proxy is built on the first browser request**, from that request's origin, because
   authcaptureproxy rewrites Amazon's links with the base URL it was built with. The external step
   URL is relative, so no Home Assistant URL setting is needed.

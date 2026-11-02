@@ -286,3 +286,19 @@ async def test_finish_proxy_login_success(alexa_login: MagicMock) -> None:
     login.test_loggedin = AsyncMock(return_value=True)
     await _auth().async_finish_proxy_login()
     login.test_loggedin.assert_awaited_once_with()
+
+
+async def test_proxy_landing_without_a_code_is_not_a_sign_in(proxy_login: MagicMock) -> None:
+    """A bare landing URL still goes to our callback, which refuses it."""
+    clients: list[httpx.AsyncClient] = []
+    proxy = await _proxy(clients)
+    try:
+        result = await proxy.async_check_response(
+            _response("https://www.amazon.com/ap/maplanding"), {}, {}
+        )
+
+        assert result == URL(PROXY_RETURN)
+        assert not proxy.signed_in
+    finally:
+        for client in clients:
+            await client.aclose()
