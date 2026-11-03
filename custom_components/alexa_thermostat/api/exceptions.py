@@ -30,13 +30,3 @@ class AlexaApiError(AlexaError):
 
 class AlexaCommandError(AlexaApiError):
     """A control command was rejected by Alexa (for example BAD_REQUEST)."""
-
-
-class AlexaLoginChallenge(AlexaError):
-    """Amazon asked for an extra login step (OTP code or captcha)."""
-
-    def __init__(self, challenge: str, captcha_url: str | None = None) -> None:
-        """Store which challenge Amazon requested."""
-        super().__init__(challenge)
-        self.challenge = challenge
-        self.captcha_url = captcha_url

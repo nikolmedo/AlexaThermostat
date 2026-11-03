@@ -15,6 +15,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -27,16 +28,14 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 import voluptuous as vol
+from yarl import URL
 
 from .api import (
-    CHALLENGE_CAPTCHA,
-    CHALLENGE_SECURITY_CODE,
     AlexaAuth,
     AlexaAuthError,
     AlexaConnectionError,
     AlexaError,
     AlexaInvalidOtpSecret,
-    AlexaLoginChallenge,
     AlexaThermostatClient,
     is_one_time_code,
     normalize_otp_input,
@@ -44,11 +43,10 @@ from .api import (
 from .const import (
     AMAZON_DOMAINS,
     CONF_AMAZON_DOMAIN,
-    CONF_CAPTCHA,
     CONF_DEVICE_UUID,
+    CONF_HASS_URL,
     CONF_OTP_SECRET,
     CONF_SCAN_INTERVAL,
-    CONF_SECURITY_CODE,
     CONF_TOKENS,
     DEFAULT_AMAZON_DOMAIN,
     DEFAULT_SCAN_INTERVAL,
@@ -57,6 +55,7 @@ from .const import (
     MIN_SCAN_INTERVAL,
 )
 from .coordinator import AlexaThermostatConfigEntry
+from .proxy_view import async_start_sign_in, async_stop_sign_in
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,6 +64,9 @@ _LOGGER = logging.getLogger(__name__)
 AMAZON_DOMAIN_PATTERN = re.compile(r"amazon\.(?:[a-z]{2,3}|co\.[a-z]{2}|com\.[a-z]{2})")
 
 PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+HASS_URL_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.URL))
+# Used when Home Assistant has no URL configured (Settings > System > Network).
+FALLBACK_HASS_URL = "http://homeassistant.local:8123"
 
 USER_SCHEMA = vol.Schema(
     {
@@ -78,6 +80,7 @@ USER_SCHEMA = vol.Schema(
             )
         ),
         vol.Optional(CONF_OTP_SECRET): PASSWORD_SELECTOR,
+        vol.Required(CONF_HASS_URL): HASS_URL_SELECTOR,
     }
 )
 
@@ -85,15 +88,21 @@ REAUTH_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR,
         vol.Optional(CONF_OTP_SECRET): PASSWORD_SELECTOR,
+        vol.Required(CONF_HASS_URL): HASS_URL_SELECTOR,
     }
 )
 
-SECURITY_CODE_SCHEMA = vol.Schema({vol.Required(CONF_SECURITY_CODE): str})
-CAPTCHA_SCHEMA = vol.Schema({vol.Required(CONF_CAPTCHA): str})
+
+def normalize_hass_url(value: str) -> str | None:
+    """Return the origin of an http(s) URL, or None when it is not one."""
+    url = URL(value.strip())
+    if url.scheme not in ("http", "https") or not url.host:
+        return None
+    return str(url.origin())
 
 
 class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Log in to Amazon and create the config entry."""
+    """Sign in to Amazon in the browser and create the config entry."""
 
     VERSION = 1
 
@@ -102,7 +111,8 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         self._auth: AlexaAuth | None = None
         self._email: str = ""
         self._amazon_domain: str = DEFAULT_AMAZON_DOMAIN
-        self._captcha_url: str = ""
+        self._hass_url: str | None = None
+        self._sign_in_started = False
 
     @staticmethod
     @callback
@@ -111,7 +121,7 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
         return OptionsFlowHandler()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Sign in with the Amazon email and password."""
+        """Ask for the Amazon account, then sign in through the browser."""
         errors: dict[str, str] = {}
         if user_input is not None:
             self._email = user_input[CONF_EMAIL].strip()
@@ -119,24 +129,43 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
             if not AMAZON_DOMAIN_PATTERN.fullmatch(self._amazon_domain):
                 errors[CONF_AMAZON_DOMAIN] = "invalid_domain"
             else:
-                await self.async_set_unique_id(f"{self._amazon_domain}:{self._email.lower()}")
+                # A sign-in left open in another dialog must not block a new attempt.
+                await self.async_set_unique_id(
+                    f"{self._amazon_domain}:{self._email.lower()}", raise_on_progress=False
+                )
                 self._abort_if_unique_id_configured()
-                result = await self._async_start_login(user_input, errors)
-                if result is not None:
-                    return result
+                if self._prepare_auth(user_input, errors):
+                    return await self.async_step_sign_in()
 
+        return self._show_user_form(user_input, errors)
+
+    def _show_user_form(
+        self, user_input: Mapping[str, Any] | None, errors: dict[str, str]
+    ) -> ConfigFlowResult:
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(
                 USER_SCHEMA,
                 {
-                    key: value
-                    for key, value in (user_input or {}).items()
-                    if key not in (CONF_PASSWORD, CONF_OTP_SECRET)
+                    CONF_HASS_URL: self._suggested_hass_url(),
+                    **{
+                        key: value
+                        for key, value in (user_input or {}).items()
+                        if key not in (CONF_PASSWORD, CONF_OTP_SECRET)
+                    },
                 },
             ),
             errors=errors,
         )
+
+    def _suggested_hass_url(self) -> str:
+        """Prefill the address the browser opens Home Assistant with."""
+        if self._hass_url:
+            return self._hass_url
+        try:
+            return get_url(self.hass)
+        except NoURLAvailableError:
+            return FALLBACK_HASS_URL
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         """Start a reauth when the refresh token stops working."""
@@ -147,69 +176,36 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the password again."""
+        """Ask for the password again, then sign in through the browser."""
         errors: dict[str, str] = {}
-        if user_input is not None:
-            result = await self._async_start_login(user_input, errors)
-            if result is not None:
-                return result
+        if user_input is not None and self._prepare_auth(user_input, errors):
+            return await self.async_step_sign_in()
+        return self._show_reauth_form(errors)
 
+    def _show_reauth_form(self, errors: dict[str, str]) -> ConfigFlowResult:
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=REAUTH_SCHEMA,
+            data_schema=self.add_suggested_values_to_schema(
+                REAUTH_SCHEMA, {CONF_HASS_URL: self._suggested_hass_url()}
+            ),
             errors=errors,
             description_placeholders={"email": self._email},
         )
 
-    async def async_step_security_code(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Ask for the one-time code Amazon sent."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            result = await self._async_continue_login(
-                {"securitycode": user_input[CONF_SECURITY_CODE].strip()}, errors
-            )
-            if result is not None:
-                return result
-
-        return self.async_show_form(
-            step_id="security_code", data_schema=SECURITY_CODE_SCHEMA, errors=errors
-        )
-
-    async def async_step_captcha(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Ask the user to solve the captcha Amazon showed."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            result = await self._async_continue_login(
-                {"captcha": user_input[CONF_CAPTCHA].strip()}, errors
-            )
-            if result is not None:
-                return result
-
-        return self.async_show_form(
-            step_id="captcha",
-            data_schema=CAPTCHA_SCHEMA,
-            errors=errors,
-            description_placeholders={"captcha_url": self._captcha_url},
-        )
-
-    async def _async_start_login(
-        self, user_input: dict[str, Any], errors: dict[str, str]
-    ) -> ConfigFlowResult | None:
-        await self._async_close_auth()
+    def _prepare_auth(self, user_input: Mapping[str, Any], errors: dict[str, str]) -> bool:
+        """Create the alexapy login for this attempt; False when the input is invalid."""
+        if (hass_url := normalize_hass_url(user_input[CONF_HASS_URL])) is None:
+            errors[CONF_HASS_URL] = "invalid_hass_url"
+            return False
+        self._hass_url = hass_url
+        otp_input = normalize_otp_input(user_input.get(CONF_OTP_SECRET))
+        if is_one_time_code(otp_input):
+            # A current 6-digit code cannot generate the next ones. Amazon's page
+            # asks for the code instead.
+            otp_input = ""
         reauth_uuid = None
         if self.source == SOURCE_REAUTH:
             reauth_uuid = self._get_reauth_entry().data.get(CONF_DEVICE_UUID)
-        otp_input = normalize_otp_input(user_input.get(CONF_OTP_SECRET))
-        login_data = {CONF_PASSWORD: user_input[CONF_PASSWORD]}
-        if is_one_time_code(otp_input):
-            # The user typed the current 6-digit code instead of the key:
-            # use it for this login only.
-            login_data["securitycode"] = otp_input
-            otp_input = ""
         try:
             self._auth = AlexaAuth(
                 self._amazon_domain,
@@ -221,38 +217,46 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
             )
         except AlexaInvalidOtpSecret:
             errors[CONF_OTP_SECRET] = "invalid_otp_secret"
-            return None
-        result = await self._async_continue_login(login_data, errors)
-        if result is None:
-            # The form is shown again and the next submit starts a new login.
-            await self._async_close_auth()
-        return result
+            return False
+        return True
 
-    async def _async_continue_login(
-        self, data: dict[str, str], errors: dict[str, str]
-    ) -> ConfigFlowResult | None:
+    async def async_step_sign_in(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Open Amazon's sign-in page in the browser, through Home Assistant."""
         assert self._auth is not None
+        if not self._sign_in_started:
+            self._sign_in_started = True
+            # The frontend only opens absolute http(s) URLs.
+            url = f"{self._hass_url}{async_start_sign_in(self.hass, self.flow_id, self._auth)}"
+            return self.async_external_step(
+                step_id="sign_in", url=url, description_placeholders={"url": url}
+            )
+        # The callback view resumes the flow once Amazon confirmed the sign-in.
+        return self.async_external_step_done(next_step_id="finish")
+
+    async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Exchange the browser sign-in for tokens and look for thermostats."""
+        assert self._auth is not None
+        await async_stop_sign_in(self.hass, self.flow_id)
+        self._sign_in_started = False
         try:
-            await self._auth.async_login(data)
-        except AlexaLoginChallenge as challenge:
-            if challenge.challenge == CHALLENGE_SECURITY_CODE:
-                return await self.async_step_security_code()
-            if challenge.challenge == CHALLENGE_CAPTCHA:
-                self._captcha_url = challenge.captcha_url or ""
-                return await self.async_step_captcha()
-            errors["base"] = "unsupported_challenge"
-        except AlexaInvalidOtpSecret:
-            errors["base"] = "invalid_otp_secret"
-        except AlexaAuthError:
-            errors["base"] = "invalid_auth"
+            await self._auth.async_finish_proxy_login()
         except AlexaConnectionError:
-            errors["base"] = "cannot_connect"
-        except Exception:
-            _LOGGER.exception("Unexpected error during Amazon login")
-            errors["base"] = "unknown"
-        else:
-            return await self._async_finish_login()
-        return None
+            return await self._async_sign_in_failed("cannot_connect")
+        except AlexaAuthError:
+            return await self._async_sign_in_failed("sign_in_failed")
+        return await self._async_finish_login()
+
+    async def _async_sign_in_failed(self, error: str) -> ConfigFlowResult:
+        """Show the form again; the next submit starts a new sign-in."""
+        await self._async_close_auth()
+        if self.source == SOURCE_REAUTH:
+            return self._show_reauth_form({"base": error})
+        return self._show_user_form(
+            {CONF_EMAIL: self._email, CONF_AMAZON_DOMAIN: self._amazon_domain},
+            {"base": error},
+        )
 
     async def _async_finish_login(self) -> ConfigFlowResult:
         assert self._auth is not None
@@ -279,10 +283,12 @@ class AlexaThermostatConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @callback
     def async_remove(self) -> None:
-        """Close the Amazon session when the flow is abandoned."""
-        if self._auth is not None:
-            self.hass.async_create_task(self._auth.async_close())
-            self._auth = None
+        """Stop the sign-in and close the Amazon session when the flow ends."""
+        self.hass.async_create_task(self._async_cleanup())
+
+    async def _async_cleanup(self) -> None:
+        await async_stop_sign_in(self.hass, self.flow_id)
+        await self._async_close_auth()
 
     async def _async_close_auth(self) -> None:
         if self._auth is not None:

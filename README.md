@@ -74,10 +74,19 @@ standard thermostat card, automations, voice assistants and history.
 
 1. Go to **Settings > Devices & services > Add integration** and pick **Alexa Thermostat**.
 2. Enter your Amazon email, password and region (for example `amazon.com` or `amazon.co.uk`).
-   Adding the 2FA app key (see below) is strongly recommended.
-3. If Amazon asks for a verification code or a captcha, the next screen will ask for it.
+   Adding the 2FA app key (see below) is strongly recommended. Check the **Home Assistant URL**:
+   it must be the address this browser uses to open Home Assistant (it is prefilled from
+   **Settings > System > Network**).
+3. Amazon's sign-in page opens in a new browser tab with your details filled in. Finish signing in
+   there, including any robot check, captcha or code Amazon asks for. The tab closes by itself
+   when you are done. If no tab opens, click the link in the setup dialog.
 
 That's it. Each thermostat on your account becomes a device with one climate entity.
+
+The sign-in page is served through your Home Assistant, so open the integration from a browser
+that can reach Home Assistant (the same one you are using for setup works). Allow pop-ups for
+Home Assistant if the new tab does not open. Amazon lists the integration as "Alexa Media Player"
+in your devices, because it uses the same sign-in library.
 
 ### Make sign-in painless with a 2FA app key (recommended)
 
@@ -87,8 +96,8 @@ generate those codes for you:
 1. On Amazon, open **Your Account > Login & security > 2-Step Verification**.
 2. Add a new authenticator app and choose **Can't scan the barcode?**.
 3. Copy the key Amazon shows (a long string of letters and digits, spaces are fine) and paste it
-   in the **2FA app key** field during setup. Use the key, not a 6-digit code: a code typed there
-   only works for that one sign-in.
+   in the **2FA app key** field during setup. Use the key, not a 6-digit code. Without a key,
+   type the code on Amazon's page when it asks.
 4. Finish adding the app on Amazon with the code your phone app (or Home Assistant) shows.
 
 You only need this once. After the first sign-in the integration keeps the session alive with a
@@ -110,7 +119,8 @@ Home Assistant ──▶ climate entity ──▶ coordinator ──▶ Alexa Gr
 The integration uses the same unofficial endpoint the Alexa web app uses
 (`/nexus/v1/graphql`) to list your thermostats, read their state and send commands. Amazon login
 is handled by [alexapy](https://pypi.org/project/alexapy/), the library behind Alexa Media
-Player.
+Player: you sign in on Amazon's own pages, passed through Home Assistant, and the integration keeps
+only the refresh token Amazon issues.
 
 When you change something, the new value shows up right away. Alexa can take a few seconds to
 report it back, so the integration keeps your value until Alexa catches up instead of flickering
@@ -118,18 +128,22 @@ back to the old one.
 
 ## Troubleshooting
 
-**"Amazon rejected the email or password" or "Could not reach Amazon" with the right password.**
-Amazon blocks some automated sign-ins and its sign-in pages change often. Wait a few minutes
-before retrying (Amazon throttles repeated attempts) and add the 2FA app key.
+**The Amazon tab does not open, or shows "Not Found".**
+Allow pop-ups for Home Assistant. The tab only works while the setup dialog is open; if you closed
+the dialog, start the setup again.
 
-**"Amazon asked for a verification step this integration cannot show yet."**
-Amazon sometimes wants you to approve the sign-in in the Amazon app or by email. Approve it and
-try again. Adding a 2FA app key avoids most of these prompts.
+**"Amazon did not confirm the sign-in."**
+Finish the sign-in on Amazon's page with the same email you entered in Home Assistant, then try
+again. If Amazon asks you to approve the sign-in in the Amazon app or by email, approve it and
+continue on the page.
+
+**"Could not reach Amazon."**
+Home Assistant could not connect to Amazon. Check its internet connection and refresh the tab.
 
 **The integration asks me to sign in again.**
 Amazon revoked the session (password change, too many devices, or a security check). Click
-**Reconfigure** on the notification and enter your password again. Your thermostat keeps its
-entity and history.
+**Reconfigure** on the notification, enter your password and finish signing in on Amazon's page.
+Your thermostat keeps its entity and history.
 
 **A temperature change is rejected.**
 You'll see the error Alexa returned. In heat/cool mode, set the low and high temperatures instead
@@ -148,7 +162,8 @@ logs and the diagnostics file.
   next poll.
 - The thermostat does not report whether it is currently heating or cooling, so there is no
   `hvac_action`.
-- Captcha and app-approval sign-in steps are only partly supported (see Troubleshooting).
+- Signing in needs a browser that can reach your Home Assistant, because Amazon's pages are
+  passed through it.
 
 ## Contributing
 

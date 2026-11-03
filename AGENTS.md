@@ -22,7 +22,8 @@ custom_components/alexa_thermostat/
     models.py          Dataclasses and enums (Temperature, ThermostatState, ...)
     exceptions.py      AlexaError hierarchy
   __init__.py          async_setup_entry / async_unload_entry
-  config_flow.py       user, security_code, captcha, reauth_confirm steps + options flow
+  config_flow.py       user / reauth_confirm -> sign_in (external step) -> finish + options flow
+  proxy_view.py        Unauthenticated proxy and callback views for the browser sign-in
   coordinator.py       DataUpdateCoordinator + optimistic overlay (apply_optimistic)
   climate.py           The climate entity (HA <-> Alexa mode/setpoint mapping)
   diagnostics.py       Redacted diagnostics
@@ -49,6 +50,10 @@ scripts/generate_icon.py  Regenerates brand/ and assets/ PNGs with Pillow
 ## Data flow
 
 ```
+sign-in: config flow form -> proxy_view.async_start_sign_in -> external step opens
+         /auth/alexa_thermostat/proxy/<flow_id> -> AlexaSignInProxy forwards to Amazon
+         -> Amazon lands on /ap/maplanding -> redirect to /auth/alexa_thermostat/callback
+         -> flow resumes -> AlexaAuth.async_finish_proxy_login() (code -> refresh token)
 setup:   AlexaAuth.async_resume() (refresh token) -> client.async_get_thermostats()
          -> coordinator first refresh -> one AlexaThermostatClimate per device
 poll:    coordinator._async_update_data -> client.async_get_state(endpoint_id) per device
@@ -149,16 +154,40 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
 - **hassfest rules that bit us:** entries under `exceptions` in `translations/en.json` must be
   objects (`{"message": "..."}`), not strings. Do not add `categories` to `manifest.json`: the
   hassfest action rejects it as an unknown key (HACS only warns when it is missing).
-- **Password sign-in is fragile.** alexapy's form login breaks whenever Amazon changes its pages
-  (October 2026: the `/ax/claim` flow) and Amazon throttles retries ("Could not reach Amazon" on
-  the second try). The 2FA app key avoids most challenges. A browser-proxy login (like Alexa
-  Media Player's) is the long-term fix. Debug logs show alexapy's status keys when sign-in fails.
+- **Sign-in only works through the browser proxy.** alexapy's headless form login broke with
+  Amazon's page changes (October 2026: `/ax/claim`) and with Amazon's robot check
+  (`/errors_page/validateCaptcha`), which alexapy 1.33/1.34 does not recognize. The proxy
+  (alexapy's `AlexaProxy` on top of `authcaptureproxy`) shows Amazon's real pages to the user,
+  who solves whatever Amazon asks. Do not bring back a headless login.
+- **Proxy views are unauthenticated** (a plain browser tab has no Home Assistant token). They only
+  answer for flow ids registered by `async_start_sign_in` that are still in-progress flows of this
+  domain, and the callback only resumes a flow after Amazon confirmed the sign-in. Success always
+  redirects to our own callback; `AlexaSignInProxy` ignores the `callback_url` query parameter
+  alexapy would follow, and only a landing with Amazon's code counts as signed in. The callback
+  resumes a flow once. Views are registered once per run (routes cannot be removed).
+- **The proxy pins the browser's origin.** authcaptureproxy forwards any URL it cannot map to
+  Amazon as is, so a request whose Host header differs from the first one (for example another
+  port) would make Home Assistant fetch that server. `_handle` answers 404 instead. A request that
+  built the proxy while the sign-in was stopped closes it and answers 404.
+- **Never add `authcaptureproxy` to the manifest `loggers`.** At debug level it logs posted form
+  fields (the Amazon password) and session cookies, and "Enable debug logging" plus a public
+  issue would leak them.
+- **The proxy is built on the first browser request**, from that request's origin, because
+  authcaptureproxy rewrites Amazon's links with the base URL it was built with.
+- **The external step URL must be absolute.** The frontend opens it with `window.open` only after
+  `sanitizeHttpUrl` (`new URL(url)`, http/https only), so a relative path silently opens nothing.
+  The form asks for the Home Assistant URL (prefilled from `get_url`, origin only), and the
+  `sign_in` description repeats the URL as a link in case the browser blocks the pop-up.
+- **The 2FA code is refreshed on every proxied request** (`AlexaSignInProxy.async_handle`);
+  alexapy's own proxy computes it once, and codes expire every 30 seconds.
+- **Amazon shows the device as "Alexa Media Player".** alexapy hardcodes that name in its
+  `/auth/register` payload. Cosmetic; changing it would mean patching alexapy.
 - **Never read another integration's config entries or credentials** (for example Alexa Media
   Player's `oauth` tokens), not even read-only. The HACS review (hacs/default PR #12832) rejected
-  that shortcut, so email, password and 2FA key is the only sign-in path.
-  `tests/test_config_flow.py::test_alexa_media_player_entries_are_never_read` guards it.
-- **Config flow sessions** are closed on failed logins, on discovery failure (abort) and in
-  `async_remove` when the user abandons the dialog.
+  that shortcut. `tests/test_config_flow.py::test_alexa_media_player_entries_are_never_read`
+  guards it.
+- **Config flow sessions** are closed after a failed sign-in, on discovery failure (abort) and in
+  `async_remove` (which also stops the proxy) when the user abandons the dialog.
 
 ## Unverified against a real device
 
@@ -167,8 +196,8 @@ Confirm these on hardware before relying on them, and update this list when you 
 - `setThermostatMode` with `ECO` (the Homebridge plugin never sends ECO).
 - `setThermostatMode` with `OFF` versus `turnOff` on the Amazon Smart Thermostat.
 - The `Power` fragment inside the state query (the plugin only uses it in discovery).
-- Login challenges other than OTP and captcha (claims picker, app approval) are reported as
-  `unsupported_challenge`. A browser-proxy login like Alexa Media Player's is the planned fix.
+- The browser sign-in end to end against a real Amazon account (tests mock alexapy and Amazon),
+  including Home Assistant behind a reverse proxy or Nabu Casa remote access.
 
 ## Commands
 
@@ -201,7 +230,7 @@ Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`
 
 | Change | Files |
 |---|---|
-| Amazon login breaks | `api/auth.py`, `tests/test_auth.py` |
+| Amazon login breaks | `api/auth.py`, `proxy_view.py`, `tests/test_auth.py`, `tests/test_proxy_view.py` |
 | Alexa renames a field or feature | `api/queries.py`, `api/parser.py`, fixtures, `tests/test_parser.py` |
 | New command (for example fan mode) | `api/models.py` (Operation), `api/client.py`, `climate.py`, tests |
 | New entity (for example humidity sensor) | new platform file, add it to `PLATFORMS` in `__init__.py`, translations, tests |
