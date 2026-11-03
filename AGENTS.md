@@ -15,7 +15,7 @@ unofficial Alexa web API over GraphQL. Distributed through HACS / the Home Assis
 ```
 custom_components/alexa_thermostat/
   api/                 Pure Python. NO Home Assistant imports (see Layering rules).
-    auth.py            alexapy wrapper: login, challenges, refresh token, session, csrf
+    auth.py            alexapy wrapper: sign-in proxy, refresh token, session, csrf
     client.py          GraphQL client: discovery, state, commands, HTTP error handling
     parser.py          Pure functions: GraphQL JSON -> models, error detection
     queries.py         The three GraphQL documents
@@ -196,8 +196,8 @@ Confirm these on hardware before relying on them, and update this list when you 
 - `setThermostatMode` with `ECO` (the Homebridge plugin never sends ECO).
 - `setThermostatMode` with `OFF` versus `turnOff` on the Amazon Smart Thermostat.
 - The `Power` fragment inside the state query (the plugin only uses it in discovery).
-- The browser sign-in end to end against a real Amazon account (tests mock alexapy and Amazon),
-  including Home Assistant behind a reverse proxy or Nabu Casa remote access.
+- The browser sign-in with Home Assistant behind a reverse proxy or Nabu Casa remote access. It was
+  tested end to end only on amazon.com with a local Home Assistant URL (v0.4.0-beta.3).
 
 ## Commands
 
@@ -221,7 +221,9 @@ Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), no AI attribution lines.
 - `main` is protected: work on a branch and merge through a pull request.
 - New user-facing text goes in `translations/en.json` (config steps, errors, aborts, and
-  `exceptions` for `HomeAssistantError`/`ServiceValidationError` translation keys).
+  `exceptions` for `HomeAssistantError`/`ServiceValidationError` translation keys). hassfest
+  rejects URLs in those strings: pass them as `description_placeholders` instead
+  (`tests/test_translations.py::test_strings_contain_no_urls` guards it).
 - Every behavior change needs a test. API changes start with a fixture in `tests/fixtures/` and a
   parser test, then the client test, then the entity test.
 - Keep `api/` free of Home Assistant imports and alexapy confined to `api/auth.py`.
@@ -244,6 +246,11 @@ Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`
 3. Create a GitHub **release** (not just a tag) named `vX.Y.Z`. HACS reads releases.
 4. If a release needs a newer Home Assistant, raise `homeassistant` in `hacs.json`.
 
+To let someone test a branch first, publish a **pre-release** from its pushed commit, for example
+`gh release create v0.4.0-beta.1 --prerelease --target <full commit SHA>` (a short SHA is
+rejected). It appears in HACS under Redownload > Show beta versions and never replaces the
+latest stable release.
+
 ## Getting into the default HACS catalog
 
 Requirements met by the repository: public, `hacs.json`, `manifest.json` with `domain`,
@@ -251,4 +258,6 @@ Requirements met by the repository: public, `hacs.json`, `manifest.json` with `d
 HACS action and hassfest workflows; description, topics and issues on GitHub; green workflows and
 full GitHub releases. Submitted as hacs/default PR #12832, which adds `nikolmedo/AlexaThermostat`
 to the `integration` file (alphabetical, case-insensitive). The repository was renamed from
-`HACS-AlexaThermostat` because HACS rejects repository names that contain "HACS".
+`HACS-AlexaThermostat` because HACS rejects repository names that contain "HACS". The first review
+requested removing the reuse of Alexa Media Player's stored session (done in v0.3.0); v0.4.0
+replaced the blocked password login with the browser sign-in.

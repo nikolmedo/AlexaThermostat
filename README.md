@@ -37,8 +37,9 @@ standard thermostat card, automations, voice assistants and history.
   Assistant converts the rest.
 - If Alexa rejects a command, Home Assistant tells you instead of
   silently snapping the value back.
-- Your password is used once to sign in and is never stored. Only an
-  Amazon refresh token is kept, like the Alexa app does.
+- You sign in on Amazon's own page, so robot checks, captchas and codes just work. Your password
+  is only used to fill in that page and is never stored. Only an Amazon refresh token is kept,
+  like the Alexa app does.
 - Multiple thermostats on the same account, each as its own device.
 - A diagnostics download with secrets redacted, for painless bug reports.
 
@@ -48,6 +49,8 @@ standard thermostat card, automations, voice assistants and history.
 - An Amazon Smart Thermostat (or another Alexa-connected thermostat) that you can control from
   the Alexa app.
 - The Amazon account email and password linked to that Alexa app.
+- For setup, a browser that can reach your Home Assistant (Amazon's sign-in page is passed
+  through it).
 
 ## Installation
 
@@ -131,6 +134,11 @@ back to the old one.
 **The Amazon tab does not open, or shows "Not Found".**
 Allow pop-ups for Home Assistant. The tab only works while the setup dialog is open; if you closed
 the dialog, start the setup again.
+
+**The Amazon tab shows an error, a blank page, or never loads.**
+Check the **Home Assistant URL** in the setup form: it must be the exact address in this browser's
+address bar when you use Home Assistant (for example your local address at home, or your remote
+address when you are away). Start the setup again with the right one.
 
 **"Amazon did not confirm the sign-in."**
 Finish the sign-in on Amazon's page with the same email you entered in Home Assistant, then try
