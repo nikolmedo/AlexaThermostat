@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS Custom"></a>
+  <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Default-41BDF5.svg" alt="HACS Default"></a>
   <a href="https://github.com/nikolmedo/AlexaThermostat/releases"><img src="https://img.shields.io/github/v/release/nikolmedo/AlexaThermostat?include_prereleases" alt="Release"></a>
   <a href="https://github.com/nikolmedo/AlexaThermostat/actions/workflows/validate.yml"><img src="https://github.com/nikolmedo/AlexaThermostat/actions/workflows/validate.yml/badge.svg" alt="Validate"></a>
   <a href="https://github.com/nikolmedo/AlexaThermostat/actions/workflows/tests.yml"><img src="https://github.com/nikolmedo/AlexaThermostat/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
@@ -56,12 +56,14 @@ standard thermostat card, automations, voice assistants and history.
 
 ### HACS (recommended)
 
+Alexa Thermostat is available in the **default HACS store**, so there is no custom repository to
+add.
+
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=nikolmedo&repository=AlexaThermostat&category=integration)
 
-1. Click the button above, or in HACS open the menu in the top right corner, choose
-   **Custom repositories**, add `https://github.com/nikolmedo/AlexaThermostat` with the
-   category **Integration**.
-2. Search for **Alexa Thermostat** and download it.
+1. Click the button above, or open **HACS** in your Home Assistant sidebar and search for
+   **Alexa Thermostat**.
+2. Click **Download** and confirm.
 3. Restart Home Assistant.
 
 ### Manual

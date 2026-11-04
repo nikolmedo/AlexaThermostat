@@ -251,7 +251,10 @@ To let someone test a branch first, publish a **pre-release** from its pushed co
 rejected). It appears in HACS under Redownload > Show beta versions and never replaces the
 latest stable release.
 
-## Getting into the default HACS catalog
+## Default HACS catalog
+
+The integration is in the default HACS catalog (hacs/default PR #12832, merged), so the README
+tells users to search for it in HACS instead of adding a custom repository. Keep it that way.
 
 Requirements met by the repository: public, `hacs.json`, `manifest.json` with `domain`,
 `documentation`, `issue_tracker`, `codeowners`, `name`, `version`; brand icon; MIT license;
