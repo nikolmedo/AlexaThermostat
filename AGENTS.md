@@ -126,10 +126,9 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
 
 ## Gotchas (learned the hard way)
 
-- **Setpoint values must be JSON numbers.** Strings like `"73"` get `BAD_REQUEST`. This is the
-  bug in homebridge-alexa-smarthome issue #284 (fixed in its PR #285). `client.setpoint_payload`
-  and `tests/test_client.py::test_set_target_sends_numeric_value` guard it. Never format a
-  setpoint with `str()`.
+- **Setpoint values must be JSON numbers.** Strings like `"73"` get `BAD_REQUEST`.
+  `client.setpoint_payload` and `tests/test_client.py::test_set_target_sends_numeric_value`
+  guard it. Never format a setpoint with `str()`.
 - **The csrf header is required** and alexapy only sets it inside `AlexaAPI.__init__`, which we
   do not use. `AlexaAuth.csrf` reads it from the cookie jar.
 - **Do not use `AlexaAPI._static_request`.** It returns `None` for most 4xx responses, which hides
@@ -139,7 +138,7 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
 - **The refresh token is bound to the device uuid.** Both are stored in the entry
   (`tokens`, `device_uuid`). Reauth reuses the stored uuid. Losing the uuid invalidates the token.
 - **Mode OFF:** we send `setThermostatMode OFF` first and fall back to the `power` feature's
-  `turnOff` only when Alexa rejects it (homebridge issue #260 reports OFF is unreliable).
+  `turnOff` only when Alexa rejects it (OFF through the mode is unreliable on some thermostats).
 - **AUTO is HA's `heat_cool`**, with low/high setpoints. A single `temperature` in AUTO raises
   `ServiceValidationError` (`single_setpoint_in_auto`). ECO is a preset, not an HVAC mode.
 - **Rounding:** Fahrenheit setpoints are rounded to whole degrees, Celsius to 0.5.
@@ -193,7 +192,7 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
 
 Confirm these on hardware before relying on them, and update this list when you do:
 
-- `setThermostatMode` with `ECO` (the Homebridge plugin never sends ECO).
+- `setThermostatMode` with `ECO`.
 - `setThermostatMode` with `OFF` versus `turnOff` on the Amazon Smart Thermostat.
 - The `Power` fragment inside the state query (the plugin only uses it in discovery).
 - The browser sign-in with Home Assistant behind a reverse proxy or Nabu Casa remote access. It was

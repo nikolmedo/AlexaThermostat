@@ -90,8 +90,7 @@ def raise_for_command_errors(response: dict[str, Any]) -> None:
     """Raise AlexaCommandError when setEndpointFeatures reports errors.
 
     Alexa answers HTTP 200 even when it rejects a command, so the errors
-    array is the only reliable signal (this is how issue #284 went unnoticed
-    in the Homebridge plugin).
+    array is the only reliable signal.
     """
     raise_for_graphql_errors(response)
     result = _dig(response, "data", "setEndpointFeatures")
