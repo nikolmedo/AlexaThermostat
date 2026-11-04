@@ -183,10 +183,7 @@ alike.
 
 ## Credits
 
-The Alexa API details come from the excellent
-[homebridge-alexa-smarthome](https://github.com/joeyhage/homebridge-alexa-smarthome) by
-@joeyhage, including the setpoint fix from its open pull request #285. Sign-in is powered by
-[alexapy](https://gitlab.com/keatontaylor/alexapy).
+Sign-in is powered by [alexapy](https://gitlab.com/keatontaylor/alexapy).
 
 ## Disclaimer
 

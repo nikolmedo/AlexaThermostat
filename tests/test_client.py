@@ -1,4 +1,4 @@
-"""Tests for the GraphQL client, including the #284 setpoint regression."""
+"""Tests for the GraphQL client, including the numeric setpoint regression."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ def _last_request(auth: FakeAuth) -> dict[str, Any]:
 async def test_set_target_sends_numeric_value(
     auth: FakeAuth, client: AlexaThermostatClient, device: ThermostatDevice
 ) -> None:
-    """Regression for homebridge-alexa-smarthome #284: the value is a number."""
+    """Regression: the setpoint value is sent as a JSON number."""
     auth.session.queue(load_fixture("set_success.json"))
     await client.async_set_target_temperature(
         device, Temperature(73.0, TemperatureScale.FAHRENHEIT)

@@ -47,7 +47,7 @@ def setpoint_payload(temperature: Temperature) -> dict[str, Any]:
     """Build a setpoint payload.
 
     The value MUST be a JSON number. Amazon answers BAD_REQUEST when it is a
-    string (homebridge-alexa-smarthome issue #284, fixed by PR #285).
+    string.
     """
     value = round(float(temperature.value), 1)
     return {

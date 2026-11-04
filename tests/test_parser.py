@@ -93,7 +93,7 @@ def test_parse_unknown_mode_keeps_raw_value() -> None:
     ],
 )
 def test_parse_state_not_available(response: dict) -> None:
-    """An empty state is an error, like the Homebridge plugin."""
+    """An empty state is an error."""
     with pytest.raises(AlexaApiError, match="State not available"):
         parse_thermostat_state(response)
 

@@ -206,8 +206,7 @@ class AlexaThermostatClimate(CoordinatorEntity[AlexaThermostatCoordinator], Clim
             try:
                 await client.async_set_mode(self._device, ThermostatMode.OFF)
             except AlexaCommandError as err:
-                # Some thermostats only turn off through the power feature
-                # (homebridge-alexa-smarthome issue #260).
+                # Some thermostats only turn off through the power feature.
                 if not self._device.supports(Operation.TURN_OFF):
                     self._raise_ha_error(err)
                 await self._run(client.async_turn_off(self._device))
