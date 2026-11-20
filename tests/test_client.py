@@ -75,7 +75,6 @@ class FakeAuth:
         self.domain = "amazon.com"
         self.session = FakeSession()
         self.csrf = "csrf-token"
-        self.user_agent = "TestAgent/1.0"
         self.resume_calls = 0
 
     async def async_resume(self) -> None:
@@ -185,7 +184,11 @@ async def test_request_shape(auth: FakeAuth, client: AlexaThermostatClient) -> N
     assert len(devices) == 1
     assert call["url"] == GRAPHQL_URL
     assert call["headers"]["csrf"] == "csrf-token"
-    assert call["headers"]["User-Agent"] == "TestAgent/1.0"
+    # Regression: since 2026-11-19 Amazon answers 403 to alexapy's login agent
+    # ("AmazonWebView/Amazon Alexa/2.2.556530.0/iOS/16.6/iPhone").
+    assert call["headers"]["User-Agent"] == (
+        "AmazonWebView/AmazonAlexa/2.2.663733.0/iOS/18.5/iPhone"
+    )
     assert call["headers"]["Referer"] == "https://alexa.amazon.com/spa/index.html"
     assert "query Endpoints" in call["json"]["query"]
 
