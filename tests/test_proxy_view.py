@@ -67,6 +67,10 @@ def flows(hass: HomeAssistant) -> Generator[SimpleNamespace]:
 async def client(hass: HomeAssistant, hass_client_no_auth):
     """An HTTP client with no Home Assistant login, like a fresh browser tab."""
     assert await async_setup_component(hass, "http", {})
+    # Home Assistant keeps its router unfrozen so views can be registered after
+    # start (HomeAssistantHTTP.start). Do the same here: depending on plugin
+    # order, the test server may come from pytest-aiohttp, which freezes it.
+    hass.http.app._router.freeze = lambda: None
     return await hass_client_no_auth()
 
 
