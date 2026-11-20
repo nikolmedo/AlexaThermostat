@@ -24,6 +24,12 @@ REQUEST_TIMEOUT = ClientTimeout(total=20)
 THERMOSTAT_FEATURE = "thermostat"
 POWER_FEATURE = "power"
 
+# The Alexa app identity sent to the GraphQL API. Since 2026-11-19 Amazon
+# answers HTTP 403 to the older agent alexapy logs in with
+# ("AmazonWebView/Amazon Alexa/2.2.556530.0/iOS/16.6/iPhone"). Login requests
+# keep alexapy's agent; only the API calls below use this one.
+ALEXA_APP_USER_AGENT = "AmazonWebView/AmazonAlexa/2.2.663733.0/iOS/18.5/iPhone"
+
 
 class AuthProvider(Protocol):
     """What the client needs from the login layer (see auth.AlexaAuth)."""
@@ -36,9 +42,6 @@ class AuthProvider(Protocol):
 
     @property
     def csrf(self) -> str | None: ...
-
-    @property
-    def user_agent(self) -> str | None: ...
 
     async def async_resume(self) -> None: ...
 
@@ -173,9 +176,8 @@ class AlexaThermostatClient:
             "Content-Type": "application/json; charset=utf-8",
             "Origin": f"https://alexa.{domain}",
             "Referer": f"https://alexa.{domain}/spa/index.html",
+            "User-Agent": ALEXA_APP_USER_AGENT,
         }
         if csrf := self._auth.csrf:
             headers["csrf"] = csrf
-        if user_agent := self._auth.user_agent:
-            headers["User-Agent"] = user_agent
         return headers

@@ -73,8 +73,8 @@ All calls are `POST https://alexa.<amazon_domain>/nexus/v1/graphql` with a JSON 
 
 Headers sent by `client.py`: `Accept` and `Content-Type: application/json; charset=utf-8`,
 `Origin: https://alexa.<domain>`, `Referer: https://alexa.<domain>/spa/index.html`,
-`csrf: <value of the csrf cookie>`, and alexapy's `User-Agent`. Cookies travel in the alexapy
-session cookie jar.
+`csrf: <value of the csrf cookie>`, and `User-Agent: ALEXA_APP_USER_AGENT` (not alexapy's login
+agent, see Gotchas). Cookies travel in the alexapy session cookie jar.
 
 ### Discovery (`ENDPOINTS_QUERY`)
 
@@ -129,6 +129,11 @@ rejects a command** (for example `{"errors": [{"code": "BAD_REQUEST"}]}`), so
 - **Setpoint values must be JSON numbers.** Strings like `"73"` get `BAD_REQUEST`.
   `client.setpoint_payload` and `tests/test_client.py::test_set_target_sends_numeric_value`
   guard it. Never format a setpoint with `str()`.
+- **GraphQL rejects old app User-Agents with HTTP 403.** Since 2026-11-19 Amazon answers 403 to
+  alexapy's login agent (`AmazonWebView/Amazon Alexa/2.2.556530.0/iOS/16.6/iPhone`) on
+  `/nexus/v1/graphql`, while the refresh-token login still succeeds. `client.ALEXA_APP_USER_AGENT`
+  is sent instead; when every request starts failing with 403 after a working login, bump it to the
+  current Alexa iOS app version first. `tests/test_client.py::test_request_shape` pins it.
 - **The csrf header is required** and alexapy only sets it inside `AlexaAPI.__init__`, which we
   do not use. `AlexaAuth.csrf` reads it from the cookie jar.
 - **Do not use `AlexaAPI._static_request`.** It returns `None` for most 4xx responses, which hides

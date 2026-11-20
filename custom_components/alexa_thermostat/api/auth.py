@@ -157,12 +157,6 @@ class AlexaAuth:
         morsel = cookies.get("csrf")
         return morsel.value if morsel else None
 
-    @property
-    def user_agent(self) -> str | None:
-        """Return the user agent alexapy logged in with."""
-        headers: dict[str, str] = getattr(self._login, "_headers", None) or {}
-        return headers.get("User-Agent")
-
     async def async_create_proxy(
         self,
         base_url: str,
